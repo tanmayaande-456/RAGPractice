@@ -1,6 +1,9 @@
-python-dotenv
-langchain==0.1.16 langchain-community==0.0.34
-langchain-core
-langchain-text-splitters
-chromadb
-sentence-transformers
+streamlit==1.45.1
+chromadb==0.5.5
+sentence-transformers==3.0.1
+groq==0.26.0
+python-dotenv==1.0.1
+nltk==3.9.1
+pypdf==5.5.0
+torch==2.2.2
+transformers==4.41.2

@@ -7,7 +7,6 @@ import streamlit as st
 import nltk
 from nltk.tokenize import sent_tokenize
 from pypdf import PdfReader
-import tempfile
 
 load_dotenv()
 GROQ_API_KEY=os.getenv("GROQ_API_KEY")
@@ -35,7 +34,13 @@ def loadpdf(file):
             })
     return pages
 
-nltk.download('punkt')
+# nltk.download('punkt')
+import nltk
+
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
 
 def chunk_text(text, chunk_size=5):
     sentences = sent_tokenize(text)
