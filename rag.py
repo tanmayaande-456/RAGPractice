@@ -96,7 +96,7 @@ if files:
         #     ids=collection.get()["ids"]
         # )
 
-        ids=collections.get()["ids"]
+        ids=collection.get()["ids"]
         if ids:
             collection.delete(ids)
 
