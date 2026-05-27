@@ -1,6 +1,6 @@
 import chromadb
-import os
-from dotenv import load_dotenv
+# import os
+# from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
 from groq import Groq
 import streamlit as st
@@ -8,8 +8,9 @@ import nltk
 from nltk.tokenize import sent_tokenize
 from pypdf import PdfReader
 
-load_dotenv()
-GROQ_API_KEY=os.getenv("GROQ_API_KEY")
+# load_dotenv()
+# GROQ_API_KEY=os.getenv("GROQ_API_KEY")
+GROQ_API_KEY=st.secrets["GROQ_API_KEY"]
 
 st.title("Chatbot")
 
