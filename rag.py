@@ -138,7 +138,7 @@ if files:
             with st.chat_message("user"):
                 st.markdown(query)
             chunk, distance, metadata = retrieve(query)
-            if distance[0] > 1.5:
+            if distance[0] > 3:
                 answer = "I could not find that information in the document."
             else:
                 context = ""
