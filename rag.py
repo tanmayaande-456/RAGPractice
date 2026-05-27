@@ -92,9 +92,13 @@ if files:
             collection = client.get_collection(name="rag_collection")
         except:
             collection=client.create_collection(name="rag_collection")
-        collection.delete(
-            ids=collection.get()["ids"]
-        )
+        # collection.delete(
+        #     ids=collection.get()["ids"]
+        # )
+
+        ids=collections.get()["ids"]
+        if ids:
+            collection.delete(ids)
 
         for i, chunk_data in enumerate(allchunks):
             embedding = model.encode(chunk_data["Text"])
