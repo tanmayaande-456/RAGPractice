@@ -17,7 +17,7 @@ st.title("Chatbot")
 
 if "Chats" not in st.session_state:
     st.session_state.chats={
-        "Chat 1: ": []
+        "Chat 1": []
     }
 
 if "currentChat" not in st.session_state:
@@ -33,7 +33,7 @@ with st.sidebar:
 
     st.session_state.current_chat = selected_chat
 
-    if st.button("➕ New Chat"):
+    if st.button("+ New Chat"):
         new_chat = f"Chat {len(st.session_state.chats)+1}"
 
         st.session_state.chats[new_chat] = []
