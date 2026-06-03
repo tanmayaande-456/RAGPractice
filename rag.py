@@ -14,6 +14,14 @@ GROQ_API_KEY=st.secrets["GROQ_API_KEY"]
 
 st.title("Chatbot")
 
+if "Chats" not in st.session_state:
+    st.session_state.chats={
+        "Chat 1: ": []
+    }
+
+if "currentChat" not in st.session_state:
+    st.session_state.current_chat="Chat 1"
+
 files=st.file_uploader(
     "Upload a PDF or TXT file",
     type=["txt", "pdf"],
