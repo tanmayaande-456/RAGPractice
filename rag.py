@@ -149,16 +149,18 @@ if files:
             metadata=results["metadatas"][0]
 
             return documents, distances, metadata
+
+        messages = st.session_state.chats[st.session_state.current_chat]
         
         if "messages" not in st.session_state:
-            st.session_state.messages = []
+            messages = []
 
-        for message in st.session_state.messages:
+        for message in messages:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
         query = st.chat_input("Ask something about the document")
         if query:
-            st.session_state.messages.append({
+            st.session_state.chats[st.session_state.current_chat]({
                 "role": "user",
                 "content": query
             })
@@ -197,7 +199,7 @@ if files:
                     messages=[{"role": "user", "content": prompt}]
                 )
                 answer = response.choices[0].message.content
-            st.session_state.messages.append({
+            messages.append({
                 "role": "assistant",
                 "content": answer
             })
