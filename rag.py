@@ -14,6 +14,24 @@ GROQ_API_KEY=st.secrets["GROQ_API_KEY"]
 
 st.title("Chatbot")
 
+with st.sidebar:
+    st.header("Chats")
+
+    selected_chat = st.selectbox(
+        "Select Chat",
+        list(st.session_state.chats.keys())
+    )
+
+    st.session_state.current_chat = selected_chat
+
+    if st.button("➕ New Chat"):
+        new_chat = f"Chat {len(st.session_state.chats)+1}"
+
+        st.session_state.chats[new_chat] = []
+        st.session_state.current_chat = new_chat
+
+        st.rerun()
+
 if "Chats" not in st.session_state:
     st.session_state.chats={
         "Chat 1: ": []
