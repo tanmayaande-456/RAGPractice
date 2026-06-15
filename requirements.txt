@@ -5,3 +5,4 @@ groq==0.26.0
 python-dotenv==1.0.1
 nltk==3.9.1
 pypdf==5.5.0
+tiktoken
