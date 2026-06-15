@@ -33,8 +33,6 @@ if "chat_tokens" not in st.session_state:
         "Chat 1": 0
     }
 
-current_chat=st.session_state.current_chat
-
 MAX_TOKENS = 10000
 current_chat = st.session_state.current_chat
 if st.session_state.chat_tokens[current_chat] >= MAX_TOKENS:
