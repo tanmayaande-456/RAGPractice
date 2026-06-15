@@ -7,6 +7,8 @@ import streamlit as st
 import nltk
 from nltk.tokenize import sent_tokenize
 from pypdf import PdfReader
+from sklearn.metrics.pairwise import cosine_similarity
+import tiktoken
 
 # load_dotenv()
 # GROQ_API_KEY=os.getenv("GROQ_API_KEY")
@@ -14,38 +16,49 @@ GROQ_API_KEY=st.secrets["GROQ_API_KEY"]
 
 st.title("Chatbot")
 
+encoding=tiktoken.get_encoding("cl100k_base")
+def count_tokens(text):
+    return len(encoding.encode(text))
 
-if "Chats" not in st.session_state:
+if "chats" not in st.session_state:
     st.session_state.chats={
-        "Chat 1": []
+        "Chat 1: ": []
     }
 
-if "currentChat" not in st.session_state:
+if "current_chat" not in st.session_state:
     st.session_state.current_chat="Chat 1"
 
-with st.sidebar:
-    st.header("Chats")
+if "chat_tokens" not in st.session_state:
+    st.session_state.chat_tokens = {
+        "Chat 1": 0
+    }
 
-    selected_chat = st.selectbox(
-        "Select Chat",
-        list(st.session_state.chats.keys())
+current_chat=st.session_state.current_chat
+
+MAX_TOKENS = 10000
+current_chat = st.session_state.current_chat
+if st.session_state.chat_tokens[current_chat] >= MAX_TOKENS:
+    st.error(
+        "Token limit reached. Please create a new chat."
     )
-
-    st.session_state.current_chat = selected_chat
-
-    if st.button("+ New Chat"):
-        new_chat = f"Chat {len(st.session_state.chats)+1}"
-
-        st.session_state.chats[new_chat] = []
-        st.session_state.current_chat = new_chat
-
-        st.rerun()
+    st.stop()
 
 files=st.file_uploader(
     "Upload a PDF or TXT file",
     type=["txt", "pdf"],
     accept_multiple_files=True
 )
+
+def evaluate_answer(answer, ground_truth, model):
+    answer_embedding = model.encode(answer)
+    truth_embedding = model.encode(ground_truth)
+
+    similarity = cosine_similarity(
+        [answer_embedding],
+        [truth_embedding]
+    )[0][0]
+
+    return similarity
 
 def load_text(file):
     return file.read().decode("utf-8")
@@ -151,17 +164,23 @@ if files:
 
             return documents, distances, metadata
 
-        messages = st.session_state.chats[st.session_state.current_chat]
-        
-        if "messages" not in st.session_state:
-            messages = []
+        messages=st.session_state.chats[ st.session_state.current_chat ]
 
         for message in messages:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
         query = st.chat_input("Ask something about the document")
+        user_tokens = count_tokens(query)
+
+        st.session_state.chat_tokens[
+            st.session_state.current_chat
+        ] += user_tokens
+
+        st.session_state.chat_tokens[
+            st.session_state.current_chat
+        ] += user_tokens
         if query:
-            st.session_state.chats[st.session_state.current_chat]({
+            messages.append({
                 "role": "user",
                 "content": query
             })
@@ -200,6 +219,11 @@ if files:
                     messages=[{"role": "user", "content": prompt}]
                 )
                 answer = response.choices[0].message.content
+                answer_tokens = count_tokens(answer)
+
+                st.session_state.chat_tokens[
+                    st.session_state.current_chat
+                ] += answer_tokens
             messages.append({
                 "role": "assistant",
                 "content": answer
