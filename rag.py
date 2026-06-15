@@ -162,7 +162,7 @@ if files:
 
             return documents, distances, metadata
 
-        messages=st.session_state.chats[ current_chat ]
+        messages=current_chat
 
         for message in messages:
             with st.chat_message(message["role"]):
