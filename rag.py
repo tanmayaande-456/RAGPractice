@@ -22,7 +22,7 @@ def count_tokens(text):
 
 if "chats" not in st.session_state:
     st.session_state.chats={
-        "Chat 1: ": []
+        "Chat 1": []
     }
 
 if "current_chat" not in st.session_state:
@@ -162,7 +162,7 @@ if files:
 
             return documents, distances, metadata
 
-        messages=st.session_state.current_chat
+        messages=st.session_state.chats[st.session_state.current_chat]
 
         for message in messages:
             with st.chat_message(message["role"]):
