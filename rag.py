@@ -111,10 +111,9 @@ def chunk_pdf(pages, chunk_size=5):
     return chunks
 
 if files:
-    if query:
-        with st.sidebar:
-            st.title("Sidebar")
-            st.chats
+    with st.sidebar:
+        st.title("Sidebar")
+        st.chats
     allchunks=[]
     for file in files:
         if file.type=="text/plain": 
