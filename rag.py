@@ -181,6 +181,9 @@ if files:
         #     st.session_state.current_chat
         # ] += user_tokens
         if query:
+            with st.sidebar:
+                st.title("Sidebar")
+                
             messages.append({
                 "role": "user",
                 "content": query
