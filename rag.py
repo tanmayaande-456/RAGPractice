@@ -16,9 +16,9 @@ GROQ_API_KEY=st.secrets["GROQ_API_KEY"]
 
 st.title("Chatbot")
 
-encoding=tiktoken.get_encoding("cl100k_base")
-# def count_tokens(text):
-#     return len(encoding.encode(text))
+encoding=tiktoken.get_encoding("gpt2")
+def count_tokens(text):
+    return len(encoding.encode(text))
 
 if "chats" not in st.session_state:
     st.session_state.chats={
