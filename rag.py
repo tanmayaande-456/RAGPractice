@@ -177,9 +177,9 @@ if files:
         #     st.session_state.current_chat
         # ] += user_tokens
 
-        st.session_state.chat_tokens[
-            st.session_state.current_chat
-        ] += user_tokens
+        # st.session_state.chat_tokens[
+        #     st.session_state.current_chat
+        # ] += user_tokens
         if query:
             messages.append({
                 "role": "user",
