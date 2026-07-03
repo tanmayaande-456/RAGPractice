@@ -168,11 +168,14 @@ if files:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
         query = st.chat_input("Ask something about the document")
-        user_tokens = count_tokens(query)
+        # user_tokens = count_tokens(query)
+        if query:
+            user_tokens=count_tokens(query)
+            st.session_state.chat_tokens[current_chat]+=user_tokens
 
-        st.session_state.chat_tokens[
-            st.session_state.current_chat
-        ] += user_tokens
+        # st.session_state.chat_tokens[
+        #     st.session_state.current_chat
+        # ] += user_tokens
 
         st.session_state.chat_tokens[
             st.session_state.current_chat
