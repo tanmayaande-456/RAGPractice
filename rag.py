@@ -33,7 +33,7 @@ if "chat_tokens" not in st.session_state:
         "Chat 1": 0
     }
 
-MAX_TOKENS = 100
+MAX_TOKENS = 10000
 current_chat = st.session_state.current_chat
 if st.session_state.chat_tokens[current_chat] >= MAX_TOKENS:
     st.error(
@@ -112,7 +112,7 @@ def chunk_pdf(pages, chunk_size=5):
 with st.sidebar:
     st.title("All Chats")
     for i in st.session_state.chats:
-        st.button(i, on_click=None)
+        st.button(i, on_click=st.session_state.chats[i])
 if files:
     allchunks=[]
     for file in files:
