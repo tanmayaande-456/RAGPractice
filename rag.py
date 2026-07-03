@@ -183,6 +183,7 @@ if files:
         if query:
             with st.sidebar:
                 st.title("Sidebar")
+                st.expander("Chats", TRUE)
                 
             messages.append({
                 "role": "user",
