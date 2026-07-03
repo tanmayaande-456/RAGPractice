@@ -111,6 +111,10 @@ def chunk_pdf(pages, chunk_size=5):
     return chunks
 
 if files:
+    if query:
+        with st.sidebar:
+            st.title("Sidebar")
+            st.chats
     allchunks=[]
     for file in files:
         if file.type=="text/plain": 
@@ -180,10 +184,6 @@ if files:
         # st.session_state.chat_tokens[
         #     st.session_state.current_chat
         # ] += user_tokens
-        if query:
-            with st.sidebar:
-                st.title("Sidebar")
-                st.expander("Chats", TRUE)
                 
             messages.append({
                 "role": "user",
