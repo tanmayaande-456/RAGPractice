@@ -111,7 +111,7 @@ def chunk_pdf(pages, chunk_size=5):
     return chunks
 
 st.sidebar.title("All Chats")
-for i in st.session_state:
+for i in st.session_state.chats:
     st.warning(i)
 if files:
     allchunks=[]
