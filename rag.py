@@ -117,15 +117,9 @@ with st.sidebar:
         st.session_state.chats[new_chat] = []
         st.session_state.chat_tokens[new_chat] = 0
         st.session_state.current_chat = new_chat
-        st.rerun()
-    for chat_name in st.session_state.chats.keys():
-        if st.button(
-            chat_name,
-            use_container_width=True,
-            key=chat_name
-        ):
+    for chat_name in list(st.session_state.chats.keys()):
+        if st.button(chat_name, use_container_width=True, key=chat_name):
             st.session_state.current_chat = chat_name
-            st.rerun()
 
 if files:
     allchunks=[]
