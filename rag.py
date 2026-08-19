@@ -533,7 +533,8 @@ if query:
                             "role": "user",
                             "content": prompt
                         }
-                    ]
+                    ],
+                    reasoning_format="hidden"
                 )
 
                 answer = response.choices[0].message.content
