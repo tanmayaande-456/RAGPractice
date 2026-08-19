@@ -54,9 +54,10 @@ def get_chroma_collection():
 
 supabase = get_supabase()
 groq_client = get_groq()
+st.title("Model checking")
 #test only, remov later!!!
-# models = groq_client.models.list()
-# st.write([m.id for m in models.data])
+models = groq_client.models.list()
+st.write([m.id for m in models.data])
 
 model=get_embedding_model()
 collection = get_chroma_collection()
