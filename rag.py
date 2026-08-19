@@ -538,9 +538,9 @@ if query:
                 )
 
                 answer = response.choices[0].message.content
-                save_message(current_chat_id, "assistant", answer )
+        save_message(current_chat_id, "assistant", answer )
         
-                with st.chat_message("assistant"):
-                    st.markdown(answer)
+        with st.chat_message("assistant"):
+            st.markdown(answer)
 
 
