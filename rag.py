@@ -9,7 +9,6 @@ import streamlit as st
 import nltk
 from nltk.tokenize import sent_tokenize
 from pypdf import PdfReader
-from sklearn.metrics.pairwise import cosine_similarity
 import tiktoken
 
 GROQ_API_KEY=st.secrets["GROQ_API_KEY"]
@@ -55,7 +54,6 @@ def get_chroma_collection():
 
 supabase = get_supabase()
 groq_client = get_groq()
-model = get_embedding_model()
 collection = get_chroma_collection()
 
 st.title("Chatbot")
@@ -533,15 +531,9 @@ if query:
                 )
 
                 answer = response.choices[0].message.content
-                answer_tokens = count_tokens(answer)
+        save_message(current_chat_id, "assistant", answer )
 
-                save_message(
-                    current_chat_id,
-                    "assistant",
-                    answer
-                )
-
-                with st.chat_message("assistant"):
-                    st.markdown(answer)
+        with st.chat_message("assistant"):
+            st.markdown(answer)
 
 
