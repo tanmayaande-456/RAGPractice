@@ -54,6 +54,11 @@ def get_chroma_collection():
 
 supabase = get_supabase()
 groq_client = get_groq()
+#test only, remov later!!!
+models = groq_client.models.list()
+for model in models.data:
+    print(model.id)
+
 collection = get_chroma_collection()
 
 st.title("Chatbot")
