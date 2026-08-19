@@ -56,11 +56,9 @@ supabase = get_supabase()
 groq_client = get_groq()
 #test only, remov later!!!
 models = groq_client.models.list()
-for model in models.data:
-    print(model.id)
+st.write([m.id for m in models.data])
 
 collection = get_chroma_collection()
-
 st.title("Chatbot")
 
 encoding=tiktoken.get_encoding("gpt2")
