@@ -54,10 +54,10 @@ def get_chroma_collection():
 
 supabase = get_supabase()
 groq_client = get_groq()
-st.title("Model checking")
-#test only, remov later!!!
-models = groq_client.models.list()
-st.write([m.id for m in models.data])
+# st.title("Model checking")
+# #test only, remov later!!!
+# models = groq_client.models.list()
+# st.write([m.id for m in models.data])
 
 model=get_embedding_model()
 collection = get_chroma_collection()
@@ -526,7 +526,8 @@ if query:
                         {query}
                         """
                 response = groq_client.chat.completions.create(
-                    model="llama-3.1-8b-instant",
+                    # model="llama-3.1-8b-instant",
+                    model ="qwen/qwen3.6-27",
                     messages=[
                         {
                             "role": "user",
