@@ -527,7 +527,7 @@ if query:
                         """
                 response = groq_client.chat.completions.create(
                     # model="llama-3.1-8b-instant",
-                    model ="qwen/qwen3.6-27",
+                    model ="qwen/qwen3.6-27b",
                     messages=[
                         {
                             "role": "user",
