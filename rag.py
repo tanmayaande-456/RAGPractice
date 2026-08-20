@@ -73,8 +73,8 @@ else:
     login, signup=st.tabs(["Log in", "Sign up"])
     with login:
         st.header("Log in")
-        email=st.text_input("Email", key=email)
-        password=st.text_input("Password", type="password", key=password)
+        email=st.text_input("Email", key="login_email")
+        password=st.text_input("Password", type="password", key="login_password")
         if (st.button("Log in!", key=login_btn)):
             try:
                 response=supabase.auth.sign_in_with_password({"email": email, "password": password})
@@ -85,10 +85,10 @@ else:
                 st.error("Log in failed")
     with signup:
         st.header("Create account")
-        name=st.text_input("Name", key=name)
-        email=st.text_input("Email", key=email)
-        password=st.text_input("Password", type="password", key=password)
-        confirm_password=st.text_input("Password", type="password", key=confirm_password)
+        name=st.text_input("Name", key="signup_name")
+        email=st.text_input("Email", key="signup_email")
+        password=st.text_input("Password", type="password", key="signup_password")
+        confirm_password=st.text_input("Password", type="password", key="signup_confirm_password")
         if (st.button("Sign up", key=signup_btn)):
             if (password != confirm_password):
                 st.error("Passwords do not match")
@@ -99,6 +99,8 @@ else:
                     st.write("Please check email for confirmation")
                 except Exception as e:
                     st.error("Failed to create account")
+
+USER_ID=st.session_state.user.id
 
 st.title("Chatbot")
 
