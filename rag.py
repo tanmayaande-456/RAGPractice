@@ -15,7 +15,8 @@ GROQ_API_KEY=st.secrets["GROQ_API_KEY"]
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 SUPABASE_STORAGE_BUCKET = st.secrets["SUPABASE_STORAGE_BUCKET"]
-USER_ID = st.secrets["USER_ID"]
+# USER_ID = st.secrets["USER_ID"]
+
 CHROMA_PATH = "chroma_db"
 COLLECTION_NAME = "rag_collection"
 
@@ -54,13 +55,51 @@ def get_chroma_collection():
 
 supabase = get_supabase()
 groq_client = get_groq()
-# st.title("Model checking")
-# #test only, remov later!!!
-# models = groq_client.models.list()
-# st.write([m.id for m in models.data])
-
 model=get_embedding_model()
 collection = get_chroma_collection()
+
+if "user" not in st.session_state:
+    st.session_state.user=None
+
+if st.session_state.user is not None:
+    name=st.session_state.user.user_metadata.get("name", "User")
+    st.write(f"User: {name}")
+    if (st.button("Log out")):
+        supabase.auth.sign_out()
+        st.session_state.user=None
+        st.rerun()
+else:
+    st.title("Log in/Sign up")
+    login, signup=st.tabs(["Log in", "Sign up"])
+    with login:
+        st.header("Log in")
+        email=st.text_input("Email", key=email)
+        password=st.text_input("Password", type="password", key=password)
+        if (st.button("Log in!", key=login_btn)):
+            try:
+                response=supabase.auth.sign_in_with_password({"email": email, "password": password})
+                st.session_state.user=response.user
+                st.success("Logged in!")
+                st.rerun()
+            except Exception as e:
+                st.error("Log in failed")
+    with signup:
+        st.header("Create account")
+        name=st.text_input("Name", key=name)
+        email=st.text_input("Email", key=email)
+        password=st.text_input("Password", type="password", key=password)
+        confirm_password=st.text_input("Password", type="password", key=confirm_password)
+        if (st.button("Sign up", key=signup_btn)):
+            if (password != confirm_password):
+                st.error("Passwords do not match")
+            else:
+                try:
+                    response=supabase.auth.sign_up({"email": email, "password": password, "options": {"data": {"name": name}}})
+                    st.success("Account created")
+                    st.write("Please check email for confirmation")
+                except Exception as e:
+                    st.error("Failed to create account")
+
 st.title("Chatbot")
 
 encoding=tiktoken.get_encoding("gpt2")
