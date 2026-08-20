@@ -82,7 +82,7 @@ else:
                 st.success("Logged in!")
                 st.rerun()
             except Exception as e:
-                st.error("Log in failed")
+                st.error(f"Log in failed. Error: {e}")
     with signup:
         st.header("Create account")
         name=st.text_input("Name", key="signup_name")
@@ -98,7 +98,7 @@ else:
                     st.success("Account created")
                     st.write("Please check email for confirmation")
                 except Exception as e:
-                    st.error("Failed to create account")
+                    st.error(f"Failed to create account. Error: {e}")
     st.stop()
 
 USER_ID=st.session_state.user.id
