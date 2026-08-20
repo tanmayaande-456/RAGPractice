@@ -88,17 +88,18 @@ else:
         name=st.text_input("Name", key="signup_name")
         email=st.text_input("Email", key="signup_email")
         password=st.text_input("Password", type="password", key="signup_password")
-        confirm_password=st.text_input("Password", type="password", key="signup_confirm_password")
+        confirm_password=st.text_input("Confirm Password", type="password", key="signup_confirm_password")
         if (st.button("Sign up", key="signup_btn")):
             if (password != confirm_password):
                 st.error("Passwords do not match")
             else:
                 try:
                     response=supabase.auth.sign_up({"email": email, "password": password, "options": {"data": {"name": name}}})
-                    st.success("Account created")
+                    st.success("Account created!")
                     st.write("Please check email for confirmation")
                 except Exception as e:
-                    st.error(f"Failed to create account. Error: {e}")
+                    # st.error(f"Failed to create account. Error: {e}")
+                    st.exception(e)
     st.stop()
 
 USER_ID=st.session_state.user.id
