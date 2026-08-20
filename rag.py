@@ -75,7 +75,7 @@ else:
         st.header("Log in")
         email=st.text_input("Email", key="login_email")
         password=st.text_input("Password", type="password", key="login_password")
-        if (st.button("Log in!", key=login_btn)):
+        if (st.button("Log in!", key="login_btn")):
             try:
                 response=supabase.auth.sign_in_with_password({"email": email, "password": password})
                 st.session_state.user=response.user
@@ -89,7 +89,7 @@ else:
         email=st.text_input("Email", key="signup_email")
         password=st.text_input("Password", type="password", key="signup_password")
         confirm_password=st.text_input("Password", type="password", key="signup_confirm_password")
-        if (st.button("Sign up", key=signup_btn)):
+        if (st.button("Sign up", key="signup_btn")):
             if (password != confirm_password):
                 st.error("Passwords do not match")
             else:
