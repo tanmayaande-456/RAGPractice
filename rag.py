@@ -138,7 +138,7 @@ except LookupError:
 
 def get_chats():
     response=(
-        supabase.table("chats").select("*").eq("user_id", USER_ID).order("created_at").execute()
+        supabase.table("chats").select("*").eq("userId", USER_ID).order("created_at").execute()
     )
     return response.data or []
 
@@ -147,7 +147,7 @@ def create_chat():
     chat_number=len(chats)+1
     title=f"Chat {chat_number}"
     response=(
-        supabase.table("chats").insert({"user_id": USER_ID, "title": title}).execute()
+        supabase.table("chats").insert({"userId": USER_ID, "title": title}).execute()
     )
     return response.data[0]
 
@@ -191,7 +191,7 @@ def get_documents():
         supabase
         .table("documents")
         .select("*")
-        .eq("user_id", USER_ID)
+        .eq("userId", USER_ID)
         .order("uploaded_at", desc=True)
         .execute()
     )
@@ -205,7 +205,7 @@ def get_document_by_id(document_id):
         .table("documents")
         .select("*")
         .eq("id", document_id)
-        .eq("user_id", USER_ID)
+        .eq("userId", USER_ID)
         .limit(1)
         .execute()
     )
@@ -315,7 +315,7 @@ def process_document(file):
         embedding_values.append(embedding.tolist())
         metadatas.append({
             "document_id": document_id,
-            "user_id": USER_ID,
+            "userId": USER_ID,
             "Filename": file.name,
             "Page number": chunk[
                 "Page number"
@@ -333,7 +333,7 @@ def process_document(file):
         .table("documents") \
         .insert({
             "id": document_id,
-            "user_id": USER_ID,
+            "userId": USER_ID,
             "original_filename": file.name,
             "storage_path": storage_path,
             "storage_filename": storage_filename,
