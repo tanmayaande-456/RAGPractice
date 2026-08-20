@@ -99,6 +99,7 @@ else:
                     st.write("Please check email for confirmation")
                 except Exception as e:
                     st.error("Failed to create account")
+    st.stop()
 
 USER_ID=st.session_state.user.id
 
