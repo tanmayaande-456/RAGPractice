@@ -64,10 +64,10 @@ if "user" not in st.session_state:
 if st.session_state.user is not None:
     name=st.session_state.user.user_metadata.get("name", "User")
     st.write(f"User: {name}")
-    if (st.button("Log out")):
-        supabase.auth.sign_out()
-        st.session_state.user=None
-        st.rerun()
+    # if (st.button("Log out")):
+    #     supabase.auth.sign_out()
+    #     st.session_state.user=None
+    #     st.rerun()
 else:
     st.title("Log in/Sign up")
     login, signup=st.tabs(["Log in", "Sign up"])
@@ -98,8 +98,8 @@ else:
                     st.success("Account created!")
                     st.write("Please check email for confirmation")
                 except Exception as e:
-                    # st.error(f"Failed to create account. Error: {e}")
-                    st.exception(e)
+                    st.error(f"Failed to create account. Error: {e}")
+                    # st.exception(e)
     st.stop()
 
 USER_ID=st.session_state.user.id
@@ -586,4 +586,8 @@ if query:
         with st.chat_message("assistant"):
             st.markdown(answer)
 
-
+if st.session_state.user is not None:
+    if (st.button("Log out")):
+        supabase.auth.sign_out()
+        st.session_state.user=None
+        st.rerun()
