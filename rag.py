@@ -63,7 +63,7 @@ if "user" not in st.session_state:
 
 if st.session_state.user is not None:
     name=st.session_state.user.user_metadata.get("name", "User")
-    a, b=st.columns([8, 1])
+    a, b=st.columns([7, 2])
     with a:
         st.write(f"User: {name}")
     with b:
