@@ -350,6 +350,51 @@ def process_document(file):
         f"Uploaded and processed {file.name}"
     )
 
+def summarize_doc(file):
+    documents=get_documents()
+    if not documents:
+        return "No documents uploaded"
+    selected_doc=None
+    for document in documents:
+        if document["original_filename"].lower() == file.lower():
+            selected_doc=document
+            break
+    if selected_doc is None:
+        return "Could not find document"
+    doc_id=selected_doc["id"]
+    coll=collection.get(where={"$and": [{"userId": USER_ID}, {"document_id": doc_id}]})
+    chunks=coll.get("documents", [])
+    if not chunks:
+        return "No text in document"
+    text="\n".join(chunks)
+    MAX_CHAR=30000
+    if len(text) > MAX_CHAR:
+        text=text[:MAX_CHAR]
+    response=groq_client.chat.completions.create(model="qwen/qwen3.6-27b",
+                                                messages=[{
+                                                    "role": "system",
+                                                    "content": """
+                                    Summarize the provided document.
+                                    
+                                    Use ONLY information from the document.
+                                    
+                                    Include:
+                                    - Main topics
+                                    - Important concepts
+                                    - Important definitions
+                                    - Important formulas or facts
+                                    - Important examples when present
+                                    
+                                    Do not add outside knowledge.
+                                    Do not invent information.
+                                    Keep the summary organized and concise.
+                                    """
+                                                }, {
+                                                    "role": "user", "content": text
+                                                }],
+                                                reasoning_format="hidden")
+    return response.choices[0].message.content
+
 chats = get_chats()
 
 if not chats:
@@ -456,6 +501,28 @@ if files:
             st.error(
                 f"Error processing {file.name}: {e}"
             )
+
+#
+st.subheader("Summarize a document")
+documents = get_documents()
+if documents:
+    filenames = [
+        document["original_filename"]
+        for document in documents
+    ]
+    selected_file = st.selectbox(
+        "Select a document",
+        filenames
+    )
+    if st.button("Summarize"):
+        with st.spinner("Summarizing..."):
+            summary = summarize_doc(
+                selected_file
+            )
+        st.markdown(summary)
+else:
+    st.info("Upload a document first.")
+#
 
 chat_tokens = get_chat_token_count(
     current_chat_id
