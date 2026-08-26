@@ -518,10 +518,14 @@ if documents:
         filenames
     )
     if st.button("Summarize"):
-        st.session_state.summary = summarize_doc(
-            selected_file
-        )
-        st.success("Summary generated")
+        try:
+            st.session_state.summary = summarize_doc(
+                selected_file
+            )
+            st.success("Summary generated")
+        except Exception as e:
+            st.error(f"Could not generate summary: {e}")
+            st.exception(e)
     if st.session_state.summary != "":
         st.subheader("Summary")
         st.write(st.session_state.summary)
