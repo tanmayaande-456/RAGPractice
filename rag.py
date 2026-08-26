@@ -528,7 +528,8 @@ if documents:
                 st.exception(e)
     if st.session_state.summary:
         st.markdown("### Summary")
-        st.markdown(st.session_state.summary)
+        st.write(st.session_state.summary)
+        st.write(f"Summary length: {len(st.session_state.summary)}")
 else:
     st.info("Upload a document first.")
 #
