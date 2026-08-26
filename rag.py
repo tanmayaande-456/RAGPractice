@@ -393,10 +393,17 @@ def summarize_doc(file):
                                                     "role": "user", "content": text
                                                 }],
                                                 reasoning_format="hidden")
-    summary=response.choices[0].message.content
-    if summary is None:
-        return "No summary"
-    return summary
+    message=response.choice[0].message.content
+    st.write("Message: ")
+    st.write(message)
+    st.write("Content: ")
+    st.write(message.content)
+    st.write("Reasoning: ")
+    st.write(message.reasoning)
+    # summary=response.choices[0].message.content
+    # if summary is None:
+    #     return "No summary"
+    # return summary
     # return response.choices[0].message.content
 
 chats = get_chats()
