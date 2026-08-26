@@ -393,7 +393,11 @@ def summarize_doc(file):
                                                     "role": "user", "content": text
                                                 }],
                                                 reasoning_format="hidden")
-    return response.choices[0].message.content
+    summary=response.choices[0].message.content
+    if summary is None:
+        return "No summary"
+    return summary
+    # return response.choices[0].message.content
 
 chats = get_chats()
 
@@ -524,7 +528,7 @@ if documents:
     if st.session_state.summary != "":
         st.subheader("Summary")
         st.write(st.session_state.summary)
-        st.write(f"Summary length: {len(st.session_state.summary)}")
+        # st.write(f"Summary length: {len(st.session_state.summary)}")
 else:
     st.info("Upload a document first.")
 #
