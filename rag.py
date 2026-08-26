@@ -503,6 +503,8 @@ if files:
             )
 
 #
+if "summary" not in st.session_state:
+    st.session_state.summary = None
 st.subheader("Summarize a document")
 documents = get_documents()
 if documents:
@@ -516,10 +518,12 @@ if documents:
     )
     if st.button("Summarize"):
         with st.spinner("Summarizing..."):
-            summary = summarize_doc(
+            st.session_state.summary = summarize_doc(
                 selected_file
             )
-        st.markdown(summary)
+    if st.session_state.summary:
+        st.markdown("### Summary")
+        st.markdown(st.session_state.summary)
 else:
     st.info("Upload a document first.")
 #
