@@ -517,17 +517,12 @@ if documents:
         filenames
     )
     if st.button("Summarize"):
-        with st.spinner("Summarizing..."):
-            try:
-                st.session_state.summary = summarize_doc(
-                    selected_file
-                )
-                st.success("Summary generated")
-            except Exception as e:
-                st.error(f"Summarization failed: {e}")
-                st.exception(e)
-    if st.session_state.summary:
-        st.markdown("### Summary")
+        st.session_state.summary = summarize_doc(
+            selected_file
+        )
+        st.success("Summary generated")
+    if st.session_state.summary != "":
+        st.subheader("Summary")
         st.write(st.session_state.summary)
         st.write(f"Summary length: {len(st.session_state.summary)}")
 else:
