@@ -392,10 +392,10 @@ def summarize_doc(file):
                                                 }, {
                                                     "role": "user", "content": text
                                                 }],
-                                                reasoning_format="hidden")
+                                                reasoning_format="parsed")
     message=response.choices[0].message.content
     st.write("Reasoning: ")
-    st.write(message.reasoning)
+    st.write(response.choices[0].message.reasoning)
     return message
     # summary=response.choices[0].message.content
     # if summary is None:
