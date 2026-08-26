@@ -393,7 +393,7 @@ def summarize_doc(file):
                                                     "role": "user", "content": text
                                                 }],
                                                 reasoning_format="hidden")
-    message=response.choices[0].message.content
+    message=response.choices[0].message
     st.write("Message: ")
     st.write(message)
     st.write("Content: ")
