@@ -331,6 +331,7 @@ def process_document(file):
         embeddings=embedding_values,
         metadatas=metadatas
     )
+    st.write("DEBUG: Chroma count after adding:", collection.count())
 
     supabase \
         .table("documents") \
