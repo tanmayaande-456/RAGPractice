@@ -363,8 +363,17 @@ def summarize_doc(file):
     if selected_doc is None:
         return "Could not find document"
     doc_id = selected_doc["id"]
-    coll = collection.get(where={"$and": [{"userId": USER_ID},{"document_id": doc_id}]})
+    # coll = collection.get(where={"$and": [{"userId": USER_ID},{"document_id": doc_id}]})
+    coll = collection.get()
+    st.write("DEBUG selected document ID:", doc_id)
+    st.write("DEBUG current USER_ID:", USER_ID)
+    st.write("DEBUG Chroma count:", collection.count())
     st.write("DEBUG Chroma result:", coll)
+    st.write("DEBUG Chroma result:", coll)
+    if coll.get("metadatas"):
+        st.write("DEBUG FIRST CHROMA METADATA:")
+        st.write(coll["metadatas"][0])
+        st.write("DEBUG Chroma result:", coll)
     chunks = coll.get("documents", [])
     if not chunks:
         return "No text in document"
