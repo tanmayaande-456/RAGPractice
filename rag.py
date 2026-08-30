@@ -444,7 +444,10 @@ def summarize_doc(file):
         ],
         reasoning_format="hidden"
     )
-    return response.choices[0].message.content
+    final_summary= response.choices[0].message.content
+    st.write("DEBUG final summary")
+    st.write(final_summary)
+    return final_summary
 
 chats = get_chats()
 
@@ -555,7 +558,7 @@ if files:
 
 #
 if "summary" not in st.session_state:
-    st.session_state.summary = None
+    st.session_state.summary = ""
 st.subheader("Summarize a document")
 documents = get_documents()
 if documents:
@@ -576,7 +579,7 @@ if documents:
         except Exception as e:
             st.error(f"Could not generate summary: {e}")
             st.exception(e)
-    if st.session_state.summary != "":
+    if st.session_state.summary:
         st.subheader("Summary")
         st.write(st.session_state.summary)
         # st.write(f"Summary length: {len(st.session_state.summary)}")
