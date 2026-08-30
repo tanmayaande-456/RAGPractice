@@ -455,7 +455,7 @@ def summarize_doc(file):
     )
     final_summary= response.choices[0].message.content
     st.write("DEBUG final summary")
-    st.write(final_summary)
+    st.write(repr(final_summary))
     return final_summary
 
 chats = get_chats()
