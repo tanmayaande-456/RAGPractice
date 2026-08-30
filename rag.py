@@ -352,51 +352,99 @@ def process_document(file):
     )
 
 def summarize_doc(file):
-    documents=get_documents()
+    documents = get_documents()
     if not documents:
         return "No documents uploaded"
-    selected_doc=None
+    selected_doc = None
     for document in documents:
         if document["original_filename"].lower() == file.lower():
-            selected_doc=document
+            selected_doc = document
             break
     if selected_doc is None:
         return "Could not find document"
-    doc_id=selected_doc["id"]
-    coll=collection.get(where={"$and": [{"userId": USER_ID}, {"document_id": doc_id}]})
+    doc_id = selected_doc["id"]
+    coll = collection.get(where={"$and": [{"userId": USER_ID},{"document_id": doc_id}]})
     st.write("DEBUG Chroma result:", coll)
-    chunks=coll.get("documents", [])
+    chunks = coll.get("documents", [])
     if not chunks:
         return "No text in document"
-    text="\n".join(chunks)
-    MAX_CHAR=30000
-    if len(text) > MAX_CHAR:
-        text=text[:MAX_CHAR]
-    response=groq_client.chat.completions.create(model="qwen/qwen3.6-27b",
-                                                messages=[{
-                                                    "role": "system",
-                                                    "content": """
-                                    Summarize the provided document.
-                                    
-                                    Use ONLY information from the document.
-                                    
-                                    Include:
-                                    - Main topics
-                                    - Important concepts
-                                    - Important definitions
-                                    - Important formulas or facts
-                                    - Important examples when present
-                                    
-                                    Do not add outside knowledge.
-                                    Do not invent information.
-                                    Keep the summary organized and concise.
-                                    """
-                                                }, {
-                                                    "role": "user", "content": text
-                                                }],
-                                                reasoning_format="hidden")
-    message=response.choices[0].message.content
-    return message
+    batches = []
+    current_batch = ""
+    MAX_BATCH_CHARS = 12000
+    for chunk in chunks:
+        if (len(current_batch) + len(chunk)> MAX_BATCH_CHARS and current_batch):
+            batches.append(current_batch)
+            current_batch = ""
+        current_batch += chunk + "\n\n"
+    if current_batch:
+        batches.append(current_batch)
+    st.write("DEBUG number of summary batches:", len(batches))
+    partial_summaries = []
+    for i, batch in enumerate(batches):
+        response = groq_client.chat.completions.create(
+            model="qwen/qwen3.6-27b",
+            messages=[{
+                    "role": "system",
+                    "content": """
+                    Summarize ONLY the provided document text.
+                    
+                    Include:
+                    - Main topics
+                    - Important concepts
+                    - Important definitions
+                    - Important formulas or facts
+                    - Important examples when present
+                    
+                    Do not add outside knowledge.
+                    Do not invent information.
+                    Keep the summary concise.
+                    """
+                },
+                {
+                    "role": "user",
+                    "content": batch
+                }
+            ],
+            reasoning_format="hidden"
+        )
+        summary = response.choices[0].message.content
+        partial_summaries.append(summary)
+        st.write(f"DEBUG completed summary batch {i + 1}/{len(batches)}")
+    combined_summary = "\n\n".join(partial_summaries)
+    MAX_FINAL_CHARS = 12000
+    if len(combined_summary) > MAX_FINAL_CHARS:
+        combined_summary = combined_summary[:MAX_FINAL_CHARS]
+    response = groq_client.chat.completions.create(
+        model="qwen/qwen3.6-27b",
+        messages=[
+            {
+                "role": "system",
+                "content": """
+                Create a final organized summary from the provided
+                partial summaries.
+                
+                Include:
+                - Main topics
+                - Important concepts
+                - Important definitions
+                - Important formulas or facts
+                - Important examples when present
+                
+                Use ONLY the provided summaries.
+                Do not add outside knowledge.
+                Do not invent information.
+                Remove repetition.
+                Keep the final summary concise and organized.
+                """
+            },
+            {
+                "role": "user",
+                "content": combined_summary
+            }
+        ],
+        reasoning_format="hidden"
+    )
+    return response.choices[0].message.content
 
 chats = get_chats()
 
