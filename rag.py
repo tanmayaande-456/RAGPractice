@@ -348,7 +348,7 @@ def process_document(file):
     chunk_rows=[]
     for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
         chunk_id=f"{document_id}_{i}"
-        chunk_rows.append({"id": chunk_id, "document_id": document_id, "userId": USER_ID, "content": chunk["Text"], "embedding": embedding.tolist(), "Filename": file.name, "Page number": chunk["Page number"]})
+        chunk_rows.append({"id": chunk_id, "document_id": document_id, "userId": USER_ID, "content": chunk["Text"], "embedding": embedding.tolist(), "Filename": file.name, "PageNumber": chunk["PageNumber"]})
 
     supabase \
         .table("document_chunks") \
@@ -372,7 +372,7 @@ def summarize_doc(file):
     if selected_doc is None:
         return "Could not find document"
     doc_id = selected_doc["id"]
-    response=supabase.table('document_chunks').select("content, Filename, Page number").eq("document_id", doc_id).eq("userId", USER_ID).execute()
+    response=supabase.table('document_chunks').select("content, Filename, PageNumber").eq("document_id", doc_id).eq("userId", USER_ID).execute()
     # coll = collection.get(where={"$and": [{"userId": USER_ID},{"document_id": doc_id}]})
     # coll = collection.get()
     chunk_data=response.data or []
@@ -385,7 +385,7 @@ def summarize_doc(file):
         return "No text in document"
     chunks=[]
     for row in chunk_data:
-        chunk=(f"[Page {row['Page number']}]\n"
+        chunk=(f"[Page {row['PageNumber']}]\n"
             f"{row['content']}\n"
             f"Filename: {row['Filename']}\n\n")
         chunks.append(chunk)
