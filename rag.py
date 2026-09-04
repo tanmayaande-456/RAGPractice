@@ -375,7 +375,7 @@ def summarize_doc(file):
     response=supabase.table('document_chunks').select("content, Filename, Page number").eq("document_id", doc_id).eq("userId", USER_ID).order("Page number").execute()
     # coll = collection.get(where={"$and": [{"userId": USER_ID},{"document_id": doc_id}]})
     # coll = collection.get()
-    chunk_data=response.data || []
+    chunk_data=response.data or []
     # if coll.get("metadatas"):
     #     st.write("DEBUG FIRST CHROMA METADATA:")
     #     st.write(coll["metadatas"][0])
