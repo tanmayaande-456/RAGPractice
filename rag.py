@@ -333,9 +333,7 @@ def process_document(file):
     # )
     # st.write("DEBUG: Chroma count after adding:", collection.count())
 
-    supabase \
-        .table("documents") \
-        .insert({
+    supabase.table("documents").insert({
             "id": document_id,
             "userId": USER_ID,
             "original_filename": file.name,
@@ -343,17 +341,13 @@ def process_document(file):
             "storage_filename": storage_filename,
             "mime_type": file.type,
             "filesize": len(file_bytes)
-        }) \
-        .execute()
+        }).execute()
     chunk_rows=[]
     for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
         chunk_id=f"{document_id}_{i}"
-        chunk_rows.append({"id": chunk_id, "document_id": document_id, "userId": USER_ID, "content": chunk["Text"], "embedding": embedding.tolist(), "Filename": file.name, "PageNumber": chunk["PageNumber"]})
+        chunk_rows.append({"id": chunk_id, "document_id": document_id, "userId": USER_ID, "content": chunk["Text"], "embedding": embedding.tolist(), "Filename": file.name, "pagenumber": chunk["pagenumber"]})
 
-    supabase \
-        .table("document_chunks") \
-        .insert(chunk_rows) \
-        .execute()
+    supabase.table("document_chunks").insert(chunk_rows).execute()
 
     return (
         True,
@@ -372,7 +366,7 @@ def summarize_doc(file):
     if selected_doc is None:
         return "Could not find document"
     doc_id = selected_doc["id"]
-    response=supabase.table('document_chunks').select("content, Filename, PageNumber").eq("document_id", doc_id).eq("userId", USER_ID).execute()
+    response=supabase.table('document_chunks').select("content, Filename, pagenumber").eq("document_id", doc_id).eq("userId", USER_ID).execute() # .order("PageNUmber") later
     # coll = collection.get(where={"$and": [{"userId": USER_ID},{"document_id": doc_id}]})
     # coll = collection.get()
     chunk_data=response.data or []
