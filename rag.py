@@ -113,7 +113,7 @@ encoding=tiktoken.get_encoding("gpt2")
 def count_tokens(text):
     return len(encoding.encode(text))
 
-MAX_TOKENS = 10000
+MAX_TOKENS = 100000
 def load_text(file_bytes):
     return file_bytes.decode("utf-8")
 
