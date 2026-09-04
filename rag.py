@@ -2,7 +2,7 @@ import hashlib
 from io import BytesIO
 from supabase import create_client
 
-import chromadb
+# import chromadb
 from sentence_transformers import SentenceTransformer
 from groq import Groq
 import streamlit as st
@@ -17,8 +17,8 @@ SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 SUPABASE_STORAGE_BUCKET = st.secrets["SUPABASE_STORAGE_BUCKET"]
 # USER_ID = st.secrets["USER_ID"]
 
-CHROMA_PATH = "chroma_db"
-COLLECTION_NAME = "rag_collection"
+# CHROMA_PATH = "chroma_db"
+# COLLECTION_NAME = "rag_collection"
 
 @st.cache_resource
 def get_supabase():
@@ -42,21 +42,21 @@ def get_embedding_model():
     )
 
 
-@st.cache_resource
-def get_chroma_collection():
-    client = chromadb.PersistentClient(
-        path=CHROMA_PATH
-    )
-    collection = client.get_or_create_collection(
-        name=COLLECTION_NAME
-    )
-    return collection
+# @st.cache_resource
+# def get_chroma_collection():
+#     client = chromadb.PersistentClient(
+#         path=CHROMA_PATH
+#     )
+#     collection = client.get_or_create_collection(
+#         name=COLLECTION_NAME
+#     )
+#     return collection
 
 
 supabase = get_supabase()
 groq_client = get_groq()
 model=get_embedding_model()
-collection = get_chroma_collection()
+# collection = get_chroma_collection()
 
 if "user" not in st.session_state:
     st.session_state.user=None
@@ -307,31 +307,31 @@ def process_document(file):
         show_progress_bar=False
     )
 
-    ids = []
-    documents = []
-    embedding_values = []
-    metadatas = []
-    for i, (chunk,embedding) in enumerate(zip(chunks,embeddings)):
-        chunk_id = (f"{document_id}_{i}")
-        ids.append(chunk_id)
-        documents.append(chunk["Text"])
-        embedding_values.append(embedding.tolist())
-        metadatas.append({
-            "document_id": document_id,
-            "userId": USER_ID,
-            "Filename": file.name,
-            "Page number": chunk[
-                "Page number"
-            ]
-        })
+    # ids = []
+    # documents = []
+    # embedding_values = []
+    # metadatas = []
+    # for i, (chunk,embedding) in enumerate(zip(chunks,embeddings)):
+    #     chunk_id = (f"{document_id}_{i}")
+    #     ids.append(chunk_id)
+    #     documents.append(chunk["Text"])
+    #     embedding_values.append(embedding.tolist())
+    #     metadatas.append({
+    #         "document_id": document_id,
+    #         "userId": USER_ID,
+    #         "Filename": file.name,
+    #         "Page number": chunk[
+    #             "Page number"
+    #         ]
+    #     })
 
-    collection.add(
-        ids=ids,
-        documents=documents,
-        embeddings=embedding_values,
-        metadatas=metadatas
-    )
-    st.write("DEBUG: Chroma count after adding:", collection.count())
+    # collection.add(
+    #     ids=ids,
+    #     documents=documents,
+    #     embeddings=embedding_values,
+    #     metadatas=metadatas
+    # )
+    # st.write("DEBUG: Chroma count after adding:", collection.count())
 
     supabase \
         .table("documents") \
@@ -344,6 +344,15 @@ def process_document(file):
             "mime_type": file.type,
             "filesize": len(file_bytes)
         }) \
+        .execute()
+    chunk_rows=[]
+    for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+        chunk_id=f"{document_id}_{i}"
+        chunk_rows.append({"id": chunk_id, "document_id": document_id, "userId": USER_ID, "content": chunk["Text"], "embedding": embedding.toList(), "Filename": file.name, "Page number": chunk["Page number"]})
+
+    supabase \
+        .table("document_chunks") \
+        .insert(chunk_rows) \
         .execute()
 
     return (
