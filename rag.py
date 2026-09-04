@@ -348,7 +348,7 @@ def process_document(file):
     chunk_rows=[]
     for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
         chunk_id=f"{document_id}_{i}"
-        chunk_rows.append({"id": chunk_id, "document_id": document_id, "userId": USER_ID, "content": chunk["Text"], "embedding": embedding.toList(), "Filename": file.name, "Page number": chunk["Page number"]})
+        chunk_rows.append({"id": chunk_id, "document_id": document_id, "userId": USER_ID, "content": chunk["Text"], "embedding": embedding.tolist(), "Filename": file.name, "Page number": chunk["Page number"]})
 
     supabase \
         .table("document_chunks") \
