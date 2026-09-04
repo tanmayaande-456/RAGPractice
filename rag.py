@@ -372,7 +372,7 @@ def summarize_doc(file):
     if selected_doc is None:
         return "Could not find document"
     doc_id = selected_doc["id"]
-    response=supabase.table('document_chunks').select("content, Filename, Page number").eq("document_id", doc_id).eq("userId", USER_ID).order("Page number").execute()
+    response=supabase.table('document_chunks').select("content, Filename, Page number").eq("document_id", doc_id).eq("userId", USER_ID).execute()
     # coll = collection.get(where={"$and": [{"userId": USER_ID},{"document_id": doc_id}]})
     # coll = collection.get()
     chunk_data=response.data or []
