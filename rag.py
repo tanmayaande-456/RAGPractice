@@ -372,21 +372,24 @@ def summarize_doc(file):
     if selected_doc is None:
         return "Could not find document"
     doc_id = selected_doc["id"]
+    response=supabase.table('document_chunks').select("content, Filename, Page number").eq("document_id", doc_id).eq("userId", USER_ID).order("Page number").execute()
     # coll = collection.get(where={"$and": [{"userId": USER_ID},{"document_id": doc_id}]})
-    coll = collection.get()
-    st.write("DEBUG selected document ID:", doc_id)
-    st.write("DEBUG current USER_ID:", USER_ID)
-    st.write("DEBUG Chroma count:", collection.count())
-    st.write("DEBUG Chroma result:", coll)
-    st.write("DEBUG Chroma result:", coll)
-    if coll.get("metadatas"):
-        st.write("DEBUG FIRST CHROMA METADATA:")
-        st.write(coll["metadatas"][0])
-        st.write("DEBUG Chroma result:", coll)
-    chunks = coll.get("documents", [])
-    if not chunks:
+    # coll = collection.get()
+    chunk_data=response.data || []
+    # if coll.get("metadatas"):
+    #     st.write("DEBUG FIRST CHROMA METADATA:")
+    #     st.write(coll["metadatas"][0])
+    #     st.write("DEBUG Chroma result:", coll)
+    # chunks = coll.get("documents", [])
+    if not chunk_data:
         return "No text in document"
-    batches = []
+    chunks=[]
+    for row in chunk_data:
+        chunk=(f"[Page {row['Page number']}]\n"
+            f"{row['content']}\n"
+            f"Filename: {row['Filename']}\n\n")
+        chunks.append(chunk)
+    batches=[]
     current_batch = ""
     MAX_BATCH_CHARS = 12000
     for chunk in chunks:
@@ -396,7 +399,7 @@ def summarize_doc(file):
         current_batch += chunk + "\n\n"
     if current_batch:
         batches.append(current_batch)
-    st.write("DEBUG number of summary batches:", len(batches))
+    # st.write("DEBUG number of summary batches:", len(batches))
     partial_summaries = []
     for i, batch in enumerate(batches):
         response = groq_client.chat.completions.create(
@@ -427,7 +430,7 @@ def summarize_doc(file):
         )
         summary = response.choices[0].message.content
         partial_summaries.append(summary)
-        st.write(f"DEBUG completed summary batch {i + 1}/{len(batches)}")
+        # st.write(f"DEBUG completed summary batch {i + 1}/{len(batches)}")
     combined_summary = "\n\n".join(partial_summaries)
     MAX_FINAL_CHARS = 12000
     if len(combined_summary) > MAX_FINAL_CHARS:
