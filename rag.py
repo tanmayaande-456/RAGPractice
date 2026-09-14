@@ -655,7 +655,6 @@ if query:
             "because you have not uploaded a document yet."
         )
     else:
-            else:
         query_embedding = model.encode([query])[0]
 
         results = supabase.rpc("match_chunks", {
