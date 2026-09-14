@@ -366,6 +366,9 @@ def summarize_doc(file):
     if selected_doc is None:
         return "Could not find document"
     doc_id = selected_doc["id"]
+    st.write("DEBUG doc_id:", doc_id)
+    debug = supabase.table('document_chunks').select("id, document_id").eq("userId", USER_ID).execute()
+    st.write("DEBUG all chunk rows for user:", debug.data)
     response=supabase.table('document_chunks').select("content, Filename, pagenumber").eq("document_id", doc_id).eq("userId", USER_ID).execute() # .order("PageNUmber") later
     # coll = collection.get(where={"$and": [{"userId": USER_ID},{"document_id": doc_id}]})
     # coll = collection.get()
