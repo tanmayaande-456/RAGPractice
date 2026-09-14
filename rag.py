@@ -345,7 +345,7 @@ def process_document(file):
     chunk_rows=[]
     for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
         chunk_id=f"{document_id}_{i}"
-        chunk_rows.append({"id": chunk_id, "document_id": document_id, "userId": USER_ID, "content": chunk["Text"], "embedding": embedding.tolist(), "Filename": file.name, "pagenumber": chunk["pagenumber"]})
+        chunk_rows.append({"id": chunk_id, "document_id": document_id, "userId": USER_ID, "content": chunk["Text"], "embedding": embedding.tolist(), "Filename": file.name, "pagenumber": chunk["Page number"]})
 
     supabase.table("document_chunks").insert(chunk_rows).execute()
 
@@ -379,7 +379,7 @@ def summarize_doc(file):
         return "No text in document"
     chunks=[]
     for row in chunk_data:
-        chunk=(f"[Page {row['PageNumber']}]\n"
+        chunk=(f"[Page {row['pagenumber']}]\n"
             f"{row['content']}\n"
             f"Filename: {row['Filename']}\n\n")
         chunks.append(chunk)
@@ -655,82 +655,128 @@ if query:
             "because you have not uploaded a document yet."
         )
     else:
-        collection_count = collection.count()
-
-        if collection_count == 0:
-            answer = (
-                "I could not find that information "
-                "in the documents."
-            )
-        else:
-            k = min(5, collection_count)
-
-            query_embedding = model.encode([query])[0]
-
-            results = collection.query(
-                query_embeddings=[
-                    query_embedding.tolist()
-                ],
-                n_results=k
-            )
-
-            chunks = results["documents"][0]
-            distances = results["distances"][0]
-            metadata = results["metadatas"][0]
-
-            # distance is used to determine how close the result/answer is to the query
-            if not chunks or distances[0] > 3:
-                answer = (
-                    "I could not find that information "
-                    "in the documents."
-                )
             else:
-                context = ""
+        query_embedding = model.encode([query])[0]
 
-                for chunk, data in zip(
-                    chunks,
-                    metadata
-                ):
-                    context += (
-                        f"[Page {data['Page number']}]\n"
-                        f"{chunk}\n"
-                        f"Filename: {data['Filename']}\n\n"
-                    )
-                    prompt = f"""
-                        You are a retrieval-based chatbot.
+        results = supabase.rpc("match_chunks", {
+            "query_embedding": query_embedding.tolist(),
+            "match_user_id": USER_ID,
+            "match_count": 5
+        }).execute()
 
-                        Answer ONLY from the provided context.
+        chunks = results.data or []
 
-                        If the answer is not present in the context, say:
-                        "I could not find that information in the documents."
-
-                        Mention page numbers when relevant.
-
-                        Do not use outside knowledge.
-                        Do not make assumptions.
-                        Keep answers concise.
-
-                        Context:
-                        {context}
-
-                        Question:
-                        {query}
-                        """
-                response = groq_client.chat.completions.create(
-                    # model="llama-3.1-8b-instant",
-                    model ="qwen/qwen3.6-27b",
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
-                    ],
-                    reasoning_format="hidden"
+        # cosine similarity: higher = closer (1.0 = identical)
+        if not chunks or chunks[0]["similarity"] < 0.3:
+            answer = "I could not find that information in the documents."
+        else:
+            context = ""
+            for row in chunks:
+                context += (
+                    f"[Page {row['pagenumber']}]\n"
+                    f"{row['content']}\n"
+                    f"Filename: {row['Filename']}\n\n"
                 )
+            prompt = f"""You are a retrieval-based chatbot.
+            Answer ONLY from the provided context.
+            If the answer is not present in the context, say:
+            "I could not find that information in the documents."
+            Mention page numbers when relevant.
+            Do not use outside knowledge. Keep answers concise.
+            
+            Context:
+            {context}
+            
+            Question:
+            {query}
+            """
+            response = groq_client.chat.completions.create(
+                model="qwen/qwen3.6-27b",
+                messages=[{"role": "user", "content": prompt}],
+                reasoning_format="hidden"
+            )
+            answer = response.choices[0].message.content
 
-                answer = response.choices[0].message.content
-        save_message(current_chat_id, "assistant", answer )
+    save_message(current_chat_id, "assistant", answer)
+
+    with st.chat_message("assistant"):
+        st.markdown(answer)
+        # collection_count = collection.count()
+
+        # if collection_count == 0:
+        #     answer = (
+        #         "I could not find that information "
+        #         "in the documents."
+        #     )
+        # else:
+        #     k = min(5, collection_count)
+
+        #     query_embedding = model.encode([query])[0]
+
+        #     results = collection.query(
+        #         query_embeddings=[
+        #             query_embedding.tolist()
+        #         ],
+        #         n_results=k
+        #     )
+
+        #     chunks = results["documents"][0]
+        #     distances = results["distances"][0]
+        #     metadata = results["metadatas"][0]
+
+        #     # distance is used to determine how close the result/answer is to the query
+        #     if not chunks or distances[0] > 3:
+        #         answer = (
+        #             "I could not find that information "
+        #             "in the documents."
+        #         )
+        #     else:
+        #         context = ""
+
+        #         for chunk, data in zip(
+        #             chunks,
+        #             metadata
+        #         ):
+        #             context += (
+        #                 f"[Page {data['Page number']}]\n"
+        #                 f"{chunk}\n"
+        #                 f"Filename: {data['Filename']}\n\n"
+        #             )
+        #             prompt = f"""
+        #                 You are a retrieval-based chatbot.
+
+        #                 Answer ONLY from the provided context.
+
+        #                 If the answer is not present in the context, say:
+        #                 "I could not find that information in the documents."
+
+        #                 Mention page numbers when relevant.
+
+        #                 Do not use outside knowledge.
+        #                 Do not make assumptions.
+        #                 Keep answers concise.
+
+        #                 Context:
+        #                 {context}
+
+        #                 Question:
+        #                 {query}
+        #                 """
+        #         response = groq_client.chat.completions.create(
+        #             # model="llama-3.1-8b-instant",
+        #             model ="qwen/qwen3.6-27b",
+        #             messages=[
+        #                 {
+        #                     "role": "user",
+        #                     "content": prompt
+        #                 }
+        #             ],
+        #             reasoning_format="hidden"
+        #         )
+
+        #         answer = response.choices[0].message.content
+        # save_message(current_chat_id, "assistant", answer )
         
-        with st.chat_message("assistant"):
-            st.markdown(answer)
+        # with st.chat_message("assistant"):
+        #     st.markdown(answer)
 
