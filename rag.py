@@ -400,7 +400,7 @@ def summarize_doc(file):
     partial_summaries = []
     for i, batch in enumerate(batches):
         response = groq_client.chat.completions.create(
-            model="qwen/qwen3.6-27b",
+            model="openai/gpt-oss-120b",
             messages=[{
                     "role": "system",
                     "content": """
@@ -433,7 +433,7 @@ def summarize_doc(file):
     if len(combined_summary) > MAX_FINAL_CHARS:
         combined_summary = combined_summary[:MAX_FINAL_CHARS]
     response = groq_client.chat.completions.create(
-        model="qwen/qwen3.6-27b",
+        model="openai/gpt-oss-120b",
         messages=[
             {
                 "role": "system",
@@ -693,7 +693,7 @@ if query:
             {query}
             """
             response = groq_client.chat.completions.create(
-                model="qwen/qwen3.6-27b",
+                model="openai/gpt-oss-120b",
                 messages=[{"role": "user", "content": prompt}],
                 reasoning_format="hidden"
             )
@@ -766,7 +766,7 @@ if query:
         #                 """
         #         response = groq_client.chat.completions.create(
         #             # model="llama-3.1-8b-instant",
-        #             model ="qwen/qwen3.6-27b",
+        #             model ="openai/gpt-oss-120b",
         #             messages=[
         #                 {
         #                     "role": "user",
