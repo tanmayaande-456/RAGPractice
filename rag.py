@@ -367,7 +367,7 @@ def summarize_doc(file):
         return "Could not find document"
     doc_id = selected_doc["id"]
     st.write("DEBUG doc_id:", doc_id)
-    debug = supabase.table('document_chunks').select("id, document_id").eq("userId", USER_ID).execute()
+    debug = supabase.table('document_chunks').select("id, document_id").eq("userId", USER_ID).order("chunk_index").execute()
     st.write("DEBUG all chunk rows for user:", debug.data)
     response=supabase.table('document_chunks').select("content, Filename, pagenumber").eq("document_id", doc_id).eq("userId", USER_ID).execute() # .order("PageNUmber") later
     # coll = collection.get(where={"$and": [{"userId": USER_ID},{"document_id": doc_id}]})
@@ -590,13 +590,15 @@ if documents:
     )
     if st.button("Summarize"):
         try:
-            st.session_state.summary = summarize_doc(
-                selected_file
-            )
-            st.success("Summary generated")
+            result = summarize_doc(selected_file)
+            st.session_state.summary = result
+            st.session_state.summary_debug = repr(result)
         except Exception as e:
             st.error(f"Could not generate summary: {e}")
-            st.exception(e)
+            # st.exception(e)
+            st.session_state.summary_debug = f"EXCEPTION: {e!r}"
+    if st.session_state.get("summary_debug"):
+        st.code(st.session_state.summary_debug)
     if st.session_state.summary:
         st.subheader("Summary")
         st.write(st.session_state.summary)
