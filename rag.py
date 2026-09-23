@@ -10,6 +10,7 @@ import nltk
 from nltk.tokenize import sent_tokenize
 from pypdf import PdfReader
 import tiktoken
+# from summarize_agent import build_agent
 
 GROQ_API_KEY=st.secrets["GROQ_API_KEY"]
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
@@ -106,6 +107,8 @@ else:
     st.stop()
 
 USER_ID=st.session_state.user.id
+from summarize_agent import build_agent
+agent = build_agent(supabase, groq_client, model, USER_ID)
 
 st.title("Chatbot")
 
@@ -354,120 +357,6 @@ def process_document(file):
         f"Uploaded and processed {file.name}"
     )
 
-def summarize_doc(file):
-    documents = get_documents()
-    if not documents:
-        return "No documents uploaded"
-    selected_doc = None
-    for document in documents:
-        if document["original_filename"].lower() == file.lower():
-            selected_doc = document
-            break
-    if selected_doc is None:
-        return "Could not find document"
-    doc_id = selected_doc["id"]
-    st.write("DEBUG doc_id:", doc_id)
-    # debug = supabase.table('document_chunks').select("id, document_id").eq("userId", USER_ID).order("chunk_index").execute()
-    debug = supabase.table('document_chunks').select("id, document_id").eq("userId", USER_ID).execute()
-    st.write("DEBUG all chunk rows for user:", debug.data)
-    response=supabase.table('document_chunks').select("content, Filename, pagenumber").eq("document_id", doc_id).eq("userId", USER_ID).execute() # .order("PageNUmber") later
-    # coll = collection.get(where={"$and": [{"userId": USER_ID},{"document_id": doc_id}]})
-    # coll = collection.get()
-    chunk_data=response.data or []
-    # if coll.get("metadatas"):
-    #     st.write("DEBUG FIRST CHROMA METADATA:")
-    #     st.write(coll["metadatas"][0])
-    #     st.write("DEBUG Chroma result:", coll)
-    # chunks = coll.get("documents", [])
-    if not chunk_data:
-        return "No text in document"
-    chunks=[]
-    for row in chunk_data:
-        chunk=(f"[Page {row['pagenumber']}]\n"
-            f"{row['content']}\n"
-            f"Filename: {row['Filename']}\n\n")
-        chunks.append(chunk)
-    batches=[]
-    current_batch = ""
-    MAX_BATCH_CHARS = 12000
-    for chunk in chunks:
-        if (len(current_batch) + len(chunk)> MAX_BATCH_CHARS and current_batch):
-            batches.append(current_batch)
-            current_batch = ""
-        current_batch += chunk + "\n\n"
-    if current_batch:
-        batches.append(current_batch)
-    # st.write("DEBUG number of summary batches:", len(batches))
-    partial_summaries = []
-    for i, batch in enumerate(batches):
-        response = groq_client.chat.completions.create(
-            model="openai/gpt-oss-120b",
-            messages=[{
-                    "role": "system",
-                    "content": """
-                    Summarize ONLY the provided document text.
-                    
-                    Include:
-                    - Main topics
-                    - Important concepts
-                    - Important definitions
-                    - Important formulas or facts
-                    - Important examples when present
-                    
-                    Do not add outside knowledge.
-                    Do not invent information.
-                    Keep the summary concise.
-                    """
-                },
-                {
-                    "role": "user",
-                    "content": batch
-                }
-            ],
-            reasoning_format="hidden"
-        )
-        summary = response.choices[0].message.content
-        partial_summaries.append(summary)
-        # st.write(f"DEBUG completed summary batch {i + 1}/{len(batches)}")
-    combined_summary = "\n\n".join(partial_summaries)
-    MAX_FINAL_CHARS = 12000
-    if len(combined_summary) > MAX_FINAL_CHARS:
-        combined_summary = combined_summary[:MAX_FINAL_CHARS]
-    response = groq_client.chat.completions.create(
-        model="openai/gpt-oss-120b",
-        messages=[
-            {
-                "role": "system",
-                "content": """
-                Create a final organized summary from the provided
-                partial summaries.
-                
-                Include:
-                - Main topics
-                - Important concepts
-                - Important definitions
-                - Important formulas or facts
-                - Important examples when present
-                
-                Use ONLY the provided summaries.
-                Do not add outside knowledge.
-                Do not invent information.
-                Remove repetition.
-                Keep the final summary concise and organized.
-                """
-            },
-            {
-                "role": "user",
-                "content": combined_summary
-            }
-        ],
-        reasoning_format="hidden"
-    )
-    final_summary= response.choices[0].message.content
-    st.write("DEBUG final summary")
-    st.write(repr(final_summary))
-    return final_summary
-
 chats = get_chats()
 
 if not chats:
@@ -591,15 +480,12 @@ if documents:
     )
     if st.button("Summarize"):
         try:
-            result = summarize_doc(selected_file)
+            # result = summarize_doc(selected_file)
+            result=agent.tool_summarize_document(selected_file)
             st.session_state.summary = result
-            st.session_state.summary_debug = repr(result)
         except Exception as e:
             st.error(f"Could not generate summary: {e}")
             # st.exception(e)
-            st.session_state.summary_debug = f"EXCEPTION: {e!r}"
-    if st.session_state.get("summary_debug"):
-        st.code(st.session_state.summary_debug)
     if st.session_state.summary:
         st.subheader("Summary")
         st.write(st.session_state.summary)
@@ -653,135 +539,12 @@ if query:
     with st.chat_message("user"):
         st.markdown(query)
 
-    documents = get_documents()
-
-    if not documents:
-        answer = (
-            "I could not find that information "
-            "because you have not uploaded a document yet."
-        )
-    else:
-        query_embedding = model.encode([query])[0]
-
-        results = supabase.rpc("match_chunks", {
-            "query_embedding": query_embedding.tolist(),
-            "match_user_id": USER_ID,
-            "match_count": 5
-        }).execute()
-
-        chunks = results.data or []
-
-        # cosine similarity: higher = closer (1.0 = identical)
-        if not chunks or chunks[0]["similarity"] < 0.3:
-            answer = "I could not find that information in the documents."
-        else:
-            context = ""
-            for row in chunks:
-                context += (
-                    f"[Page {row['pagenumber']}]\n"
-                    f"{row['content']}\n"
-                    f"Filename: {row['Filename']}\n\n"
-                )
-            prompt = f"""You are a retrieval-based chatbot.
-            Answer ONLY from the provided context.
-            If the answer is not present in the context, say:
-            "I could not find that information in the documents."
-            Mention page numbers when relevant.
-            Do not use outside knowledge. Keep answers concise.
-            
-            Context:
-            {context}
-            
-            Question:
-            {query}
-            """
-            response = groq_client.chat.completions.create(
-                model="openai/gpt-oss-120b",
-                messages=[{"role": "user", "content": prompt}],
-                reasoning_format="hidden"
-            )
-            answer = response.choices[0].message.content
+    with st.chat_message("assistant"):
+        with st.status("Thinking...") as status:
+            def on_step(name, args):
+                status.write(f"`{name}` {args}")
+            answer = agent.run(query, history=messages, on_step=on_step)
+            status.update(label="Done", state="complete")
+        st.markdown(answer)
 
     save_message(current_chat_id, "assistant", answer)
-
-    with st.chat_message("assistant"):
-        st.markdown(answer)
-        # collection_count = collection.count()
-
-        # if collection_count == 0:
-        #     answer = (
-        #         "I could not find that information "
-        #         "in the documents."
-        #     )
-        # else:
-        #     k = min(5, collection_count)
-
-        #     query_embedding = model.encode([query])[0]
-
-        #     results = collection.query(
-        #         query_embeddings=[
-        #             query_embedding.tolist()
-        #         ],
-        #         n_results=k
-        #     )
-
-        #     chunks = results["documents"][0]
-        #     distances = results["distances"][0]
-        #     metadata = results["metadatas"][0]
-
-        #     # distance is used to determine how close the result/answer is to the query
-        #     if not chunks or distances[0] > 3:
-        #         answer = (
-        #             "I could not find that information "
-        #             "in the documents."
-        #         )
-        #     else:
-        #         context = ""
-
-        #         for chunk, data in zip(
-        #             chunks,
-        #             metadata
-        #         ):
-        #             context += (
-        #                 f"[Page {data['Page number']}]\n"
-        #                 f"{chunk}\n"
-        #                 f"Filename: {data['Filename']}\n\n"
-        #             )
-        #             prompt = f"""
-        #                 You are a retrieval-based chatbot.
-
-        #                 Answer ONLY from the provided context.
-
-        #                 If the answer is not present in the context, say:
-        #                 "I could not find that information in the documents."
-
-        #                 Mention page numbers when relevant.
-
-        #                 Do not use outside knowledge.
-        #                 Do not make assumptions.
-        #                 Keep answers concise.
-
-        #                 Context:
-        #                 {context}
-
-        #                 Question:
-        #                 {query}
-        #                 """
-        #         response = groq_client.chat.completions.create(
-        #             # model="llama-3.1-8b-instant",
-        #             model ="openai/gpt-oss-120b",
-        #             messages=[
-        #                 {
-        #                     "role": "user",
-        #                     "content": prompt
-        #                 }
-        #             ],
-        #             reasoning_format="hidden"
-        #         )
-
-        #         answer = response.choices[0].message.content
-        # save_message(current_chat_id, "assistant", answer )
-        
-        # with st.chat_message("assistant"):
-        #     st.markdown(answer)
-
