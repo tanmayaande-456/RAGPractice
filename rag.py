@@ -450,6 +450,7 @@ else:
 
 if st.session_state.get("quiz"):
     quiz = st.session_state.quiz
+    st.session_state.setdefault("quiz_answers", {})
     st.subheader(f"Quiz: {quiz['filename']}")
 
     for i, question in enumerate(quiz["questions"]):
