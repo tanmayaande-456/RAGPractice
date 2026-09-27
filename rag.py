@@ -1,6 +1,7 @@
 import hashlib
 from io import BytesIO
 from supabase import create_client
+import extra_streamlit_components as stx
 
 # import chromadb
 from sentence_transformers import SentenceTransformer
@@ -37,6 +38,11 @@ def get_embedding_model():
         "all-MiniLM-L6-v2"
     )
 
+@st.cache_resource
+def get_cookie_manager():
+    return stx.CookieManager(key="auth_cookies")
+cookies = get_cookie_manager()
+cookies.get_all()
 
 supabase = get_supabase()
 groq_client = get_groq()
@@ -44,6 +50,21 @@ model=get_embedding_model()
 
 if "user" not in st.session_state:
     st.session_state.user=None
+
+if st.session_state.user is None:
+    refresh_token = cookies.get("sb_refresh_token")
+    if refresh_token:
+        try:
+            restored = supabase.auth.refresh_session(refresh_token)
+            if restored and restored.user:
+                st.session_state.user = restored.user
+                cookies.set(
+                    "sb_refresh_token",
+                    restored.session.refresh_token,
+                    key="set_refresh",
+                )
+        except Exception:
+            cookies.delete("sb_refresh_token", key="del_refresh")
 
 if st.session_state.user is not None:
     name=st.session_state.user.user_metadata.get("name", "User")
@@ -53,6 +74,7 @@ if st.session_state.user is not None:
     with b:
         if (st.button("Log out")):
             supabase.auth.sign_out()
+            cookies.delete("sb_refresh_token", key="logout_cookie")
             st.session_state.user=None
             st.rerun()
 else:
@@ -66,6 +88,8 @@ else:
             try:
                 response=supabase.auth.sign_in_with_password({"email": email, "password": password})
                 st.session_state.user=response.user
+                cookies.set("sb_refresh_token", response.session.refresh_token, key="login_cookie",
+                )
                 st.success("Logged in!")
                 st.rerun()
             except Exception as e:
