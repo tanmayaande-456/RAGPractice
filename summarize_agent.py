@@ -5,6 +5,7 @@ AGENT_MODEL = "openai/gpt-oss-120b"
 MAX_BATCH_CHARS = 12000
 MAX_FINAL_CHARS = 12000
 MAX_SUMMARY_RETURN_CHARS = 8000
+from quiz_generator_agent import QuizMixin, QUIZ_TOOL
 
 SYSTEM_PROMPT = """You are a retrieval assistant for the user's uploaded documents.
 
@@ -89,9 +90,10 @@ TOOLS = [
         },
     },
 ]
+TOOLS.append(QUIZ_TOOL)
 
 
-class DocumentAgent:
+class DocumentAgent(QuizMixin):
     def __init__(self, supabase, groq_client, embed_model, user_id):
         self.supabase = supabase
         self.groq = groq_client
@@ -272,6 +274,13 @@ class DocumentAgent:
             if name == "summarize_document":
                 return self.tool_summarize_document(
                     arguments.get("filename", "")
+                )
+            if name == "generate_quiz":
+                return self.tool_generate_quiz(
+                    arguments.get("filename", ""),
+                    arguments.get("num_questions", 5),
+                    arguments.get("topic"),
+                    arguments.get("difficulty", "medium"),
                 )
             return f"Unknown tool: {name}"
         except Exception as e:
