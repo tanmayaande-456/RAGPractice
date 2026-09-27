@@ -10,16 +10,11 @@ import nltk
 from nltk.tokenize import sent_tokenize
 from pypdf import PdfReader
 import tiktoken
-# from summarize_agent import build_agent
 
 GROQ_API_KEY=st.secrets["GROQ_API_KEY"]
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 SUPABASE_STORAGE_BUCKET = st.secrets["SUPABASE_STORAGE_BUCKET"]
-# USER_ID = st.secrets["USER_ID"]
-
-# CHROMA_PATH = "chroma_db"
-# COLLECTION_NAME = "rag_collection"
 
 @st.cache_resource
 def get_supabase():
@@ -43,21 +38,9 @@ def get_embedding_model():
     )
 
 
-# @st.cache_resource
-# def get_chroma_collection():
-#     client = chromadb.PersistentClient(
-#         path=CHROMA_PATH
-#     )
-#     collection = client.get_or_create_collection(
-#         name=COLLECTION_NAME
-#     )
-#     return collection
-
-
 supabase = get_supabase()
 groq_client = get_groq()
 model=get_embedding_model()
-# collection = get_chroma_collection()
 
 if "user" not in st.session_state:
     st.session_state.user=None
@@ -310,32 +293,6 @@ def process_document(file):
         show_progress_bar=False
     )
 
-    # ids = []
-    # documents = []
-    # embedding_values = []
-    # metadatas = []
-    # for i, (chunk,embedding) in enumerate(zip(chunks,embeddings)):
-    #     chunk_id = (f"{document_id}_{i}")
-    #     ids.append(chunk_id)
-    #     documents.append(chunk["Text"])
-    #     embedding_values.append(embedding.tolist())
-    #     metadatas.append({
-    #         "document_id": document_id,
-    #         "userId": USER_ID,
-    #         "Filename": file.name,
-    #         "Page number": chunk[
-    #             "Page number"
-    #         ]
-    #     })
-
-    # collection.add(
-    #     ids=ids,
-    #     documents=documents,
-    #     embeddings=embedding_values,
-    #     metadatas=metadatas
-    # )
-    # st.write("DEBUG: Chroma count after adding:", collection.count())
-
     supabase.table("documents").insert({
             "id": document_id,
             "userId": USER_ID,
@@ -480,7 +437,6 @@ if documents:
     )
     if st.button("Summarize"):
         try:
-            # result = summarize_doc(selected_file)
             result=agent.tool_summarize_document(selected_file)
             st.session_state.summary = result
         except Exception as e:
@@ -489,10 +445,48 @@ if documents:
     if st.session_state.summary:
         st.subheader("Summary")
         st.write(st.session_state.summary)
-        # st.write(f"Summary length: {len(st.session_state.summary)}")
 else:
     st.info("Upload a document first.")
-#
+
+if st.session_state.get("quiz"):
+    quiz = st.session_state.quiz
+    st.subheader(f"Quiz: {quiz['filename']}")
+
+    for i, question in enumerate(quiz["questions"]):
+        st.markdown(f"**{i + 1}. {question['question']}**")
+        st.session_state.quiz_answers[i] = st.radio(
+            "Select an answer",
+            options=range(len(question["options"])),
+            format_func=lambda x, q=question: q["options"][x],
+            index=None,
+            key=f"quiz_q_{i}",
+            label_visibility="collapsed",
+        )
+
+    if st.button("Submit answers"):
+        st.session_state.quiz_submitted = True
+
+    if st.session_state.get("quiz_submitted"):
+        score = 0
+        for i, question in enumerate(quiz["questions"]):
+            chosen = st.session_state.quiz_answers.get(i)
+            correct = question["correct_index"]
+            if chosen == correct:
+                score += 1
+                st.success(f"{i + 1}. Correct")
+            else:
+                st.error(
+                    f"{i + 1}. Answer: {question['options'][correct]}"
+                )
+            if question["explanation"]:
+                st.caption(question["explanation"])
+
+        st.subheader(f"Score: {score}/{len(quiz['questions'])}")
+
+    if st.button("Clear quiz"):
+        for key in ("quiz", "quiz_answers", "quiz_submitted"):
+            st.session_state.pop(key, None)
+        st.rerun()
 
 chat_tokens = get_chat_token_count(
     current_chat_id
@@ -543,8 +537,24 @@ if query:
         with st.status("Thinking...") as status:
             def on_step(name, args):
                 status.write(f"`{name}` {args}")
-            answer = agent.run(query, history=messages, on_step=on_step)
-            status.update(label="Done", state="complete")
+            try:
+                answer = agent.run(query, history=messages, on_step=on_step)
+                status.update(label="Done", state="complete")
+            except Exception as e:
+                answer = f"Something went wrong: {e}"
+                status.update(label="Failed", state="error")
         st.markdown(answer)
+    # if agent.last_quiz:
+    #     st.session_state.quiz = agent.last_quiz
+    #     st.session_state.quiz_answers = {}
+    #     st.session_state.quiz_submitted = False
 
     save_message(current_chat_id, "assistant", answer)
+    if agent.last_quiz:
+        st.session_state.quiz = agent.last_quiz
+        st.session_state.quiz_answers = {}
+        st.session_state.quiz_submitted = False
+        for key in list(st.session_state.keys()):
+            if key.startswith("quiz_q_"):
+                del st.session_state[key]
+        st.rerun()
