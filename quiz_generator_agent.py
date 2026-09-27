@@ -1,16 +1,19 @@
 import json
 
+QUIZ_MODEL = "openai/gpt-oss-120b"
+
 MAX_QUIZ_SOURCE_CHARS = 14000
 MAX_QUIZ_QUESTIONS = 15
+
 QUIZ_TOOL = {
     "type": "function",
     "function": {
         "name": "generate_quiz",
         "description": (
             "Generate a multiple-choice quiz from one of the user's "
-            "documents. Use this when the user asks to be quizzed, tested, "
+            "documents. Use this when the user asks to be quizzed or tested, "
             "or wants practice questions. Do not use it to answer questions "
-            "about content."
+            "about document content - use search_documents for that."
         ),
         "parameters": {
             "type": "object",
@@ -45,7 +48,6 @@ QUIZ_TOOL = {
     },
 }
 
-
 QUIZ_SYSTEM_PROMPT = """You write multiple-choice quizzes from source material.
 
 Return ONLY a JSON object. No preamble, no explanation, no markdown fences.
@@ -74,11 +76,12 @@ Rules:
 
 
 def _extract_json(text):
-    """Models sometimes wrap JSON in fences or prose. Pull out the object."""
     text = (text or "").strip()
 
     if text.startswith("```"):
-        text = text.split("```")[1]
+        parts = text.split("```")
+        if len(parts) > 1:
+            text = parts[1]
         if text.startswith("json"):
             text = text[4:]
         text = text.strip()
@@ -92,8 +95,10 @@ def _extract_json(text):
 
 
 def _validate_questions(raw_questions, limit):
-    """Drop anything malformed rather than trusting the model."""
     clean = []
+
+    if not isinstance(raw_questions, list):
+        return clean
 
     for item in raw_questions:
         if not isinstance(item, dict):
@@ -130,118 +135,124 @@ def _validate_questions(raw_questions, limit):
 
     return clean
 
-def _load_document_text(self, document_id, limit_chars):
-    """Shared by the summarizer and the quiz generator."""
-    response = (
-        self.supabase.table("document_chunks")
-        .select("content, pagenumber")
-        .eq("document_id", document_id)
-        .eq("userId", self.user_id)
-        .execute()
-    )
 
-    rows = response.data or []
-    if not rows:
-        return ""
+class QuizMixin:
 
-    rows.sort(key=lambda row: row.get("pagenumber") or 0)
+    last_quiz = None
 
-    text = ""
-    for row in rows:
-        piece = f"[Page {row['pagenumber']}]\n{row['content']}\n\n"
-        if len(text) + len(piece) > limit_chars:
-            break
-        text += piece
-
-    return text
-
-
-def tool_generate_quiz(
-    self,
-    filename,
-    num_questions=5,
-    topic=None,
-    difficulty="medium",
-):
-    document = self._resolve_document(filename)
-    if document is None:
-        return (
-            f"Could not find a document called '{filename}'.\n"
-            + self.tool_list_documents()
+    def _load_document_text(self, document_id, limit_chars):
+        response = (
+            self.supabase.table("document_chunks")
+            .select("content, pagenumber")
+            .eq("document_id", document_id)
+            .eq("userId", self.user_id)
+            .execute()
         )
 
-    try:
-        num_questions = int(num_questions)
-    except (TypeError, ValueError):
-        num_questions = 5
-    num_questions = max(1, min(num_questions, MAX_QUIZ_QUESTIONS))
+        rows = response.data or []
+        if not rows:
+            return ""
 
-    if difficulty not in ("easy", "medium", "hard"):
-        difficulty = "medium"
+        rows.sort(key=lambda row: row.get("pagenumber") or 0)
 
-    source = self._load_document_text(
-        document["id"],
-        MAX_QUIZ_SOURCE_CHARS,
-    )
-    if not source:
-        return "That document has no extracted text to build a quiz from."
-
-    focus = (
-        f"Focus the questions on: {topic}."
-        if topic
-        else "Cover the document broadly."
-    )
-
-    instruction = (
-        f"Write {num_questions} {difficulty}-difficulty questions. "
-        f"{focus}\n\nSource text:\n\n{source}"
-    )
-
-    questions = []
-    last_error = None
-
-    for _ in range(2):
-        try:
-            response = self.groq.chat.completions.create(
-                model=AGENT_MODEL,
-                messages=[
-                    {"role": "system", "content": QUIZ_SYSTEM_PROMPT},
-                    {"role": "user", "content": instruction},
-                ],
-                reasoning_format="hidden",
-                temperature=0.4,
-            )
-            parsed = _extract_json(response.choices[0].message.content)
-            questions = _validate_questions(
-                parsed.get("questions", []),
-                num_questions,
-            )
-            if questions:
+        text = ""
+        for row in rows:
+            piece = f"[Page {row['pagenumber']}]\n{row['content']}\n\n"
+            if len(text) + len(piece) > limit_chars:
                 break
-        except (ValueError, json.JSONDecodeError) as e:
-            last_error = e
+            text += piece
 
-    if not questions:
-        return (
-            "Could not generate a valid quiz from that document."
-            + (f" ({last_error})" if last_error else "")
+        return text
+
+    def tool_generate_quiz(
+        self,
+        filename,
+        num_questions=5,
+        topic=None,
+        difficulty="medium",
+    ):
+        document = self._resolve_document(filename)
+        if document is None:
+            return (
+                f"Could not find a document called '{filename}'.\n"
+                + self.tool_list_documents()
+            )
+
+        try:
+            num_questions = int(num_questions)
+        except (TypeError, ValueError):
+            num_questions = 5
+        num_questions = max(1, min(num_questions, MAX_QUIZ_QUESTIONS))
+
+        if difficulty not in ("easy", "medium", "hard"):
+            difficulty = "medium"
+
+        source = self._load_document_text(
+            document["id"],
+            MAX_QUIZ_SOURCE_CHARS,
+        )
+        if not source:
+            return "That document has no extracted text to build a quiz from."
+
+        focus = (
+            f"Focus the questions on: {topic}."
+            if topic
+            else "Cover the document broadly."
         )
 
-    self.last_quiz = {
-        "filename": document["original_filename"],
-        "topic": topic,
-        "difficulty": difficulty,
-        "questions": questions,
-    }
+        instruction = (
+            f"Write {num_questions} {difficulty}-difficulty questions. "
+            f"{focus}\n\nSource text:\n\n{source}"
+        )
 
-    preview = "\n".join(
-        f"{i + 1}. {question['question']}"
-        for i, question in enumerate(questions)
-    )
+        questions = []
+        last_error = None
 
-    return (
-        f"Generated {len(questions)} {difficulty} questions from "
-        f"{document['original_filename']}. The quiz is displayed to the user "
-        f"below — tell them it is ready and do not repeat the questions or "
-        f"reveal any answers.\n\nQuestions asked:\n{preview}"
-    )
+        for _ in range(2):
+            try:
+                response = self.groq.chat.completions.create(
+                    model=QUIZ_MODEL,
+                    messages=[
+                        {"role": "system", "content": QUIZ_SYSTEM_PROMPT},
+                        {"role": "user", "content": instruction},
+                    ],
+                    reasoning_format="hidden",
+                    temperature=0.4,
+                )
+                parsed = _extract_json(
+                    response.choices[0].message.content
+                )
+                questions = _validate_questions(
+                    parsed.get("questions", []),
+                    num_questions,
+                )
+                if questions:
+                    break
+            except (ValueError, json.JSONDecodeError) as e:
+                last_error = e
+
+        if not questions:
+            return (
+                "Could not generate a valid quiz from that document."
+                + (f" ({last_error})" if last_error else "")
+            )
+
+        self.last_quiz = {
+            "filename": document["original_filename"],
+            "topic": topic,
+            "difficulty": difficulty,
+            "questions": questions,
+        }
+
+        preview = "\n".join(
+            f"{i + 1}. {question['question']}"
+            for i, question in enumerate(questions)
+        )
+
+        return (
+            f"Generated {len(questions)} {difficulty} questions from "
+            f"{document['original_filename']}. The quiz is already displayed "
+            f"to the user below. Reply with one short sentence telling them "
+            f"it is ready. Do NOT repeat the questions and do NOT reveal any "
+            f"answers.\n\nQuestions asked:\n{preview}"
+        )
