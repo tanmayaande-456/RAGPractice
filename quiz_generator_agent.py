@@ -2,18 +2,21 @@ import json
 
 QUIZ_MODEL = "openai/gpt-oss-120b"
 
-MAX_QUIZ_SOURCE_CHARS = 14000
 MAX_QUIZ_QUESTIONS = 15
+MAX_QUIZ_STEPS = 8
+READ_CHUNK_CHARS = 8000
+MAX_SEARCH_CANDIDATES = 40
 
 QUIZ_TOOL = {
     "type": "function",
     "function": {
         "name": "generate_quiz",
         "description": (
-            "Generate a multiple-choice quiz from one of the user's "
-            "documents. Use this when the user asks to be quizzed or tested, "
-            "or wants practice questions. Do not use it to answer questions "
-            "about document content - use search_documents for that."
+            "Hand off to the quiz agent to build a multiple-choice quiz from "
+            "one of the user's documents. Use this when the user asks to be "
+            "quizzed or tested, or wants practice questions. Do not use it to "
+            "answer questions about document content - use search_documents "
+            "for that."
         ),
         "parameters": {
             "type": "object",
@@ -48,77 +51,174 @@ QUIZ_TOOL = {
     },
 }
 
-QUIZ_SYSTEM_PROMPT = """You write multiple-choice quizzes from source material.
+QUIZ_AGENT_PROMPT = """You are a quiz-writing agent. You build a multiple-choice
+quiz from ONE document, using your tools to gather the source material.
 
-Return ONLY a JSON object. No preamble, no explanation, no markdown fences.
+Workflow:
+1. Gather material.
+   - If a topic is given, start with search_document for that topic. If the
+     results are thin, try one or two other phrasings.
+   - If no topic is given, use read_document. Call it again with the
+     next_offset it gives you so the quiz covers the whole document, not
+     just the beginning.
+2. Write questions ONLY from text you actually retrieved with your tools.
+   Invent nothing and use no outside knowledge.
+3. Deliver the quiz by calling submit_quiz. If it rejects the quiz, fix the
+   listed problems and call submit_quiz again with the full corrected list.
 
-Shape:
-{
-  "questions": [
-    {
-      "question": "...",
-      "options": ["...", "...", "...", "..."],
-      "correct_index": 0,
-      "explanation": "Why this answer is correct, referencing the source."
-    }
-  ]
-}
-
-Rules:
-- Base every question ONLY on the provided text. Invent nothing.
+Question rules:
 - Exactly 4 options per question. Exactly one is correct.
-- Wrong options must be plausible and related to the topic, not obviously
-  silly. Vary which index is correct.
+- Wrong options must be plausible and related to the topic. Vary which
+  index is correct.
 - Keep questions self-contained: do not write "according to the passage".
-- If the text does not support the requested number of questions, return
-  fewer rather than padding.
+- The explanation says why the answer is correct, based on the source.
+- source_page is the page number of the passage that supports the answer.
+  It must be a page you retrieved.
+- Match the requested difficulty.
+- If the material does not support the requested number of questions,
+  submit fewer rather than padding.
 """
 
+QUIZ_AGENT_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "read_document",
+            "description": (
+                "Read the document in order, one section at a time. Returns "
+                "text with page markers and a next_offset for the following "
+                "section."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "offset": {
+                        "type": "integer",
+                        "description": (
+                            "Where to start reading. Use 0 first, then the "
+                            "next_offset from the previous read."
+                        ),
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_document",
+            "description": (
+                "Semantic search within this document only. Returns the most "
+                "relevant passages with page numbers."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "What to search for, in natural language.",
+                    },
+                    "match_count": {
+                        "type": "integer",
+                        "description": "How many passages. Default 6, max 15.",
+                    },
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "submit_quiz",
+            "description": (
+                "Submit the finished quiz. It is validated; if rejected, fix "
+                "the problems and submit again."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "questions": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "question": {"type": "string"},
+                                "options": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                },
+                                "correct_index": {"type": "integer"},
+                                "explanation": {"type": "string"},
+                                "source_page": {"type": "integer"},
+                            },
+                            "required": [
+                                "question",
+                                "options",
+                                "correct_index",
+                                "explanation",
+                                "source_page",
+                            ],
+                        },
+                    },
+                },
+                "required": ["questions"],
+            },
+        },
+    },
+]
 
-def _extract_json(text):
-    text = (text or "").strip()
 
-    if text.startswith("```"):
-        parts = text.split("```")
-        if len(parts) > 1:
-            text = parts[1]
-        if text.startswith("json"):
-            text = text[4:]
-        text = text.strip()
-
-    start = text.find("{")
-    end = text.rfind("}")
-    if start == -1 or end == -1:
-        raise ValueError("No JSON object found in model output.")
-
-    return json.loads(text[start : end + 1])
-
-
-def _validate_questions(raw_questions, limit):
+def _validate_questions(raw_questions, limit, seen_pages):
     clean = []
+    problems = []
+
+    if isinstance(raw_questions, str):
+        try:
+            raw_questions = json.loads(raw_questions)
+        except json.JSONDecodeError:
+            return clean, ["'questions' was not valid JSON."]
 
     if not isinstance(raw_questions, list):
-        return clean
+        return clean, ["'questions' must be a list."]
 
-    for item in raw_questions:
+    for number, item in enumerate(raw_questions, start=1):
+        label = f"Question {number}"
+
         if not isinstance(item, dict):
+            problems.append(f"{label}: must be an object.")
             continue
 
         question = item.get("question")
         options = item.get("options")
-        index = item.get("correct_index")
 
-        if not question or not isinstance(options, list):
+        if not question:
+            problems.append(f"{label}: missing question text.")
             continue
-        if len(options) < 2:
+        if not isinstance(options, list) or len(options) != 4:
+            problems.append(f"{label}: must have exactly 4 options.")
             continue
 
         try:
-            index = int(index)
+            index = int(item.get("correct_index"))
         except (TypeError, ValueError):
+            problems.append(f"{label}: correct_index must be an integer.")
+            continue
+        if not 0 <= index < len(options):
+            problems.append(f"{label}: correct_index must be 0-3.")
             continue
 
-        if not 0 <= index < len(options):
+        try:
+            page = int(item.get("source_page"))
+        except (TypeError, ValueError):
+            problems.append(f"{label}: source_page must be an integer.")
+            continue
+        if page not in seen_pages:
+            problems.append(
+                f"{label}: source_page {page} is not a page you retrieved. "
+                "Only cite pages returned by read_document or search_document."
+            )
             continue
 
         clean.append(
@@ -127,57 +227,174 @@ def _validate_questions(raw_questions, limit):
                 "options": [str(option) for option in options],
                 "correct_index": index,
                 "explanation": str(item.get("explanation", "")),
+                "source_page": page,
             }
         )
 
-        if len(clean) >= limit:
-            break
-
-    return clean
+    return clean[:limit], problems
 
 
-class QuizMixin:
+class QuizAgent:
 
-    last_quiz = None
+    def __init__(self, supabase, groq_client, embed_model, user_id):
+        self.supabase = supabase
+        self.groq = groq_client
+        self.embed_model = embed_model
+        self.user_id = user_id
+        self._reset(None, 0)
 
-    def _load_document_text(self, document_id, limit_chars):
+    def _reset(self, document, num_questions):
+        self._document = document
+        self._num_questions = num_questions
+        self._chunks = []
+        self._seen_pages = set()
+        self._result = None
+        self._best_partial = []
+
+    def _load_chunks(self):
         response = (
             self.supabase.table("document_chunks")
             .select("content, pagenumber")
-            .eq("document_id", document_id)
+            .eq("document_id", self._document["id"])
             .eq("userId", self.user_id)
             .execute()
         )
-
         rows = response.data or []
-        if not rows:
-            return ""
-
         rows.sort(key=lambda row: row.get("pagenumber") or 0)
+        return rows
 
-        text = ""
-        for row in rows:
-            piece = f"[Page {row['pagenumber']}]\n{row['content']}\n\n"
-            if len(text) + len(piece) > limit_chars:
+    def _remember_page(self, page):
+        try:
+            self._seen_pages.add(int(page))
+        except (TypeError, ValueError):
+            pass
+
+    def tool_read_document(self, offset=0):
+        try:
+            offset = max(0, int(offset))
+        except (TypeError, ValueError):
+            offset = 0
+
+        total_chunks = len(self._chunks)
+        if offset >= total_chunks:
+            return "End of document. There is no more text."
+
+        parts = []
+        size = 0
+        index = offset
+        while index < total_chunks:
+            row = self._chunks[index]
+            piece = f"[Page {row['pagenumber']}]\n{row['content']}\n"
+            if parts and size + len(piece) > READ_CHUNK_CHARS:
                 break
-            text += piece
+            parts.append(piece)
+            size += len(piece)
+            self._remember_page(row.get("pagenumber"))
+            index += 1
 
-        return text
+        if index < total_chunks:
+            footer = f"\n(next_offset: {index} of {total_chunks} chunks)"
+        else:
+            footer = "\n(End of document.)"
+        return "\n".join(parts) + footer
 
-    def tool_generate_quiz(
+    def tool_search_document(self, query, match_count=6):
+        try:
+            match_count = int(match_count)
+        except (TypeError, ValueError):
+            match_count = 6
+        match_count = max(1, min(match_count, 15))
+
+        query_embedding = self.embed_model.encode([query])[0]
+        results = self.supabase.rpc(
+            "match_chunks",
+            {
+                "query_embedding": query_embedding.tolist(),
+                "match_user_id": self.user_id,
+                "match_count": MAX_SEARCH_CANDIDATES,
+            },
+        ).execute()
+
+        filename = self._document["original_filename"]
+        rows = [
+            row
+            for row in results.data or []
+            if row.get("Filename") == filename
+            and row.get("similarity", 0) >= 0.3
+        ][:match_count]
+
+        if not rows:
+            return (
+                "No relevant passages in this document. Try different "
+                "wording, or use read_document."
+            )
+
+        parts = []
+        for row in rows:
+            self._remember_page(row.get("pagenumber"))
+            parts.append(
+                f"[Page {row['pagenumber']}]"
+                f" (similarity {row['similarity']:.2f})\n"
+                f"{row['content']}"
+            )
+        return "\n\n".join(parts)
+
+    def tool_submit_quiz(self, questions):
+        clean, problems = _validate_questions(
+            questions,
+            self._num_questions,
+            self._seen_pages,
+        )
+
+        if len(clean) > len(self._best_partial):
+            self._best_partial = clean
+
+        if problems:
+            return (
+                "Quiz rejected. Fix these problems and call submit_quiz again "
+                "with the full corrected list:\n- " + "\n- ".join(problems)
+            )
+        if not clean:
+            return "Quiz rejected: it contained no questions."
+
+        self._result = clean
+        return f"Quiz accepted with {len(clean)} questions."
+
+    def _call_tool(self, name, arguments):
+        try:
+            if name == "read_document":
+                return self.tool_read_document(arguments.get("offset", 0))
+            if name == "search_document":
+                return self.tool_search_document(
+                    arguments.get("query", ""),
+                    arguments.get("match_count", 6),
+                )
+            if name == "submit_quiz":
+                return self.tool_submit_quiz(arguments.get("questions", []))
+            return f"Unknown tool: {name}"
+        except Exception as e:
+            return f"Tool '{name}' failed: {e}"
+    def _finish(self, topic, difficulty, questions):
+        quiz = {
+            "filename": self._document["original_filename"],
+            "topic": topic,
+            "difficulty": difficulty,
+            "questions": questions,
+        }
+        return quiz, f"Generated {len(questions)} questions."
+
+    def run(
         self,
-        filename,
+        document,
         num_questions=5,
         topic=None,
         difficulty="medium",
+        on_step=None,
     ):
-        document = self._resolve_document(filename)
-        if document is None:
-            return (
-                f"Could not find a document called '{filename}'.\n"
-                + self.tool_list_documents()
-            )
-
+        """
+        Returns (quiz_dict, message). quiz_dict is None on failure and
+        message explains why.
+        """
         try:
             num_questions = int(num_questions)
         except (TypeError, ValueError):
@@ -187,72 +404,97 @@ class QuizMixin:
         if difficulty not in ("easy", "medium", "hard"):
             difficulty = "medium"
 
-        source = self._load_document_text(
-            document["id"],
-            MAX_QUIZ_SOURCE_CHARS,
+        self._reset(document, num_questions)
+        self._chunks = self._load_chunks()
+        if not self._chunks:
+            return None, "That document has no extracted text to build a quiz from."
+
+        task = (
+            f"Document: {document['original_filename']} "
+            f"({len(self._chunks)} chunks)\n"
+            f"Number of questions: {num_questions}\n"
+            f"Difficulty: {difficulty}\n"
+            + (
+                f"Topic: {topic}"
+                if topic
+                else "Topic: none - cover the whole document."
+            )
         )
-        if not source:
-            return "That document has no extracted text to build a quiz from."
 
-        focus = (
-            f"Focus the questions on: {topic}."
-            if topic
-            else "Cover the document broadly."
-        )
+        messages = [
+            {"role": "system", "content": QUIZ_AGENT_PROMPT},
+            {"role": "user", "content": task},
+        ]
+        nudged = False
 
-        instruction = (
-            f"Write {num_questions} {difficulty}-difficulty questions. "
-            f"{focus}\n\nSource text:\n\n{source}"
-        )
-
-        questions = []
-        last_error = None
-
-        for _ in range(2):
-            try:
-                response = self.groq.chat.completions.create(
-                    model=QUIZ_MODEL,
-                    messages=[
-                        {"role": "system", "content": QUIZ_SYSTEM_PROMPT},
-                        {"role": "user", "content": instruction},
-                    ],
-                    reasoning_format="hidden",
-                    temperature=0.4,
-                )
-                parsed = _extract_json(
-                    response.choices[0].message.content
-                )
-                questions = _validate_questions(
-                    parsed.get("questions", []),
-                    num_questions,
-                )
-                if questions:
-                    break
-            except (ValueError, json.JSONDecodeError) as e:
-                last_error = e
-
-        if not questions:
-            return (
-                "Could not generate a valid quiz from that document."
-                + (f" ({last_error})" if last_error else "")
+        for _ in range(MAX_QUIZ_STEPS):
+            response = self.groq.chat.completions.create(
+                model=QUIZ_MODEL,
+                messages=messages,
+                tools=QUIZ_AGENT_TOOLS,
+                tool_choice="auto",
+                reasoning_format="hidden",
+                temperature=0.4,
             )
 
-        self.last_quiz = {
-            "filename": document["original_filename"],
-            "topic": topic,
-            "difficulty": difficulty,
-            "questions": questions,
-        }
+            message = response.choices[0].message
+            tool_calls = message.tool_calls or []
 
-        preview = "\n".join(
-            f"{i + 1}. {question['question']}"
-            for i, question in enumerate(questions)
-        )
+            if not tool_calls:
+                if nudged:
+                    break
+                nudged = True
+                messages.append(
+                    {"role": "assistant", "content": message.content or ""}
+                )
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": "Deliver the quiz by calling submit_quiz.",
+                    }
+                )
+                continue
 
-        return (
-            f"Generated {len(questions)} {difficulty} questions from "
-            f"{document['original_filename']}. The quiz is already displayed "
-            f"to the user below. Reply with one short sentence telling them "
-            f"it is ready. Do NOT repeat the questions and do NOT reveal any "
-            f"answers.\n\nQuestions asked:\n{preview}"
-        )
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": message.content or "",
+                    "tool_calls": [
+                        {
+                            "id": call.id,
+                            "type": "function",
+                            "function": {
+                                "name": call.function.name,
+                                "arguments": call.function.arguments,
+                            },
+                        }
+                        for call in tool_calls
+                    ],
+                }
+            )
+
+            for call in tool_calls:
+                try:
+                    arguments = json.loads(call.function.arguments or "{}")
+                except json.JSONDecodeError:
+                    arguments = {}
+
+                if on_step:
+                    on_step(call.function.name, arguments)
+
+                result = self._call_tool(call.function.name, arguments)
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": call.id,
+                        "content": result,
+                    }
+                )
+
+            if self._result is not None:
+                return self._finish(topic, difficulty, self._result)
+
+        if self._best_partial:
+            return self._finish(topic, difficulty, self._best_partial)
+
+        return None, "The quiz agent could not produce a valid quiz from that document."
