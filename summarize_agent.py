@@ -5,7 +5,7 @@ AGENT_MODEL = "openai/gpt-oss-120b"
 MAX_BATCH_CHARS = 12000
 MAX_FINAL_CHARS = 12000
 MAX_SUMMARY_RETURN_CHARS = 8000
-from quiz_generator_agent import QuizMixin, QUIZ_TOOL
+from quiz_generator_agent import QuizAgent, QUIZ_TOOL
 
 SYSTEM_PROMPT = """You are a retrieval assistant for the user's uploaded documents.
 
@@ -15,6 +15,8 @@ You have tools. Use them instead of guessing:
 - search_documents: for specific questions about content. This is your default.
 - summarize_document: ONLY when the user wants an overview of a whole document.
   It is slow and expensive, so never call it to answer a specific question.
+- generate_quiz: when the user wants to be quizzed, tested, or wants practice
+  questions. It hands the job to a separate quiz agent.
 
 Rules:
 - Answer only from tool results. Never use outside knowledge.
@@ -93,12 +95,15 @@ TOOLS = [
 TOOLS.append(QUIZ_TOOL)
 
 
-class DocumentAgent(QuizMixin):
+class DocumentAgent:
     def __init__(self, supabase, groq_client, embed_model, user_id):
         self.supabase = supabase
         self.groq = groq_client
         self.embed_model = embed_model
         self.user_id = user_id
+        self.quiz_agent = QuizAgent(supabase, groq_client, embed_model, user_id)
+        self.last_quiz = None
+        self._on_step = None
 
     def _get_documents(self):
         response = (
@@ -194,7 +199,6 @@ class DocumentAgent(QuizMixin):
         if not chunk_data:
             return "That document has no extracted text."
 
-        # stable sort keeps insertion order within a page
         chunk_data.sort(key=lambda row: row.get("pagenumber") or 0)
 
         chunks = [
@@ -262,6 +266,52 @@ class DocumentAgent(QuizMixin):
         header = f"Summary of {document['original_filename']}:\n\n"
         return header + final_summary[:MAX_SUMMARY_RETURN_CHARS]
 
+    def tool_generate_quiz(
+        self,
+        filename,
+        num_questions=5,
+        topic=None,
+        difficulty="medium",
+    ):
+        """Hand off to QuizAgent, which runs its own loop."""
+        document = self._resolve_document(filename)
+        if document is None:
+            return (
+                f"Could not find a document called '{filename}'.\n"
+                + self.tool_list_documents()
+            )
+
+        def forward_step(name, arguments):
+            if self._on_step:
+                self._on_step(f"quiz_agent.{name}", arguments)
+
+        quiz, message = self.quiz_agent.run(
+            document,
+            num_questions=num_questions,
+            topic=topic,
+            difficulty=difficulty,
+            on_step=forward_step,
+        )
+
+        if quiz is None:
+            return message
+
+        self.last_quiz = quiz
+        questions = quiz["questions"]
+
+        preview = "\n".join(
+            f"{i + 1}. {question['question']}"
+            for i, question in enumerate(questions)
+        )
+
+        return (
+            f"Generated {len(questions)} {quiz['difficulty']} questions from "
+            f"{quiz['filename']}. The quiz is already displayed "
+            f"to the user below. Reply with one short sentence telling them "
+            f"it is ready. Do NOT repeat the questions and do NOT reveal any "
+            f"answers.\n\nQuestions asked:\n{preview}"
+        )
+
     def _call_tool(self, name, arguments):
         try:
             if name == "list_documents":
@@ -291,7 +341,10 @@ class DocumentAgent(QuizMixin):
         history: list of {"role": "user"|"assistant", "content": str} from the
                  current chat (tool turns are not persisted).
         on_step: optional callback(tool_name, arguments) for UI feedback.
+                 Quiz agent steps arrive prefixed with "quiz_agent.".
         """
+        self._on_step = on_step
+
         messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
         for message in history or []:
