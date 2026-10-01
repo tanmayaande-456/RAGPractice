@@ -455,12 +455,60 @@ if documents:
         "Select a document",
         filenames
     )
-    if st.button("Summarize"):
-        try:
-            result=agent.tool_summarize_document(selected_file)
-            st.session_state.summary = result
-        except Exception as e:
-            st.error(f"Could not generate summary: {e}")
+    col_a, col_b = st.columns(2)
+    with col_a:
+        num_questions = st.slider("Number of questions", 1, 15, 5)
+    with col_b:
+        difficulty = st.radio(
+            "Difficulty",
+            options=["easy", "medium", "hard"],
+            index=1,
+            horizontal=True,
+        )
+        
+    topic = st.text_input(
+        "Focus on a topic (optional)",
+        placeholder="e.g. dynamic programming",
+    )
+
+    col_c, col_d = st.columns(2)
+
+    with col_c:
+        if st.button("Summarize", use_container_width=True):
+            try:
+                result = agent.tool_summarize_document(selected_file)
+                st.session_state.summary = result
+            except Exception as e:
+                st.error(f"Could not generate summary: {e}")
+
+    with col_d:
+        if st.button("Generate quiz", use_container_width=True):
+            try:
+                with st.spinner("Writing questions..."):
+                    agent.tool_generate_quiz(
+                        selected_file,
+                        num_questions=num_questions,
+                        topic=topic.strip() or None,
+                        difficulty=difficulty,
+                    )
+                if agent.last_quiz:
+                    st.session_state.quiz = agent.last_quiz
+                    st.session_state.quiz_answers = {}
+                    st.session_state.quiz_submitted = False
+                    for key in list(st.session_state.keys()):
+                        if key.startswith("quiz_q_"):
+                            del st.session_state[key]
+                    st.rerun()
+                else:
+                    st.error("Could not generate a quiz from that document.")
+            except Exception as e:
+                st.error(f"Could not generate quiz: {e}")
+    # if st.button("Summarize"):
+    #     try:
+    #         result=agent.tool_summarize_document(selected_file)
+    #         st.session_state.summary = result
+    #     except Exception as e:
+    #         st.error(f"Could not generate summary: {e}")
             # st.exception(e)
     if st.session_state.summary:
         st.subheader("Summary")
