@@ -38,11 +38,7 @@ def get_embedding_model():
         "all-MiniLM-L6-v2"
     )
 
-@st.cache_resource
-def get_cookie_manager():
-    return stx.CookieManager(key="auth_cookies")
-cookies = get_cookie_manager()
-cookies.get_all()
+cookies = stx.CookieManager(key="auth_cookies")
 
 supabase = get_supabase()
 groq_client = get_groq()
