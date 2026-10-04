@@ -333,6 +333,31 @@ def process_document(file):
         True,
         f"Uploaded and processed {file.name}"
     )
+def delete_document(document_id):
+    document = get_document_by_id(document_id)
+    if not document:
+        return (False, "Document not found.")
+
+    supabase.table("document_chunks") \
+        .delete() \
+        .eq("document_id", document_id) \
+        .eq("userId", USER_ID) \
+        .execute()
+
+    supabase.table("documents") \
+        .delete() \
+        .eq("id", document_id) \
+        .eq("userId", USER_ID) \
+        .execute()
+
+    try:
+        supabase.storage \
+            .from_(SUPABASE_STORAGE_BUCKET) \
+            .remove([document["storage_path"]])
+    except Exception as e:
+        return (True, f"Deleted {document['original_filename']}, but the stored file could not be removed: {e}")
+
+    return (True, f"Deleted {document['original_filename']}")
 
 chats = get_chats()
 
@@ -398,29 +423,33 @@ with st.sidebar:
 
     documents = get_documents()
 
-    if documents:
+        if documents:
         for document in documents:
-            st.write(
-                f"{document['original_filename']}"
-            )
-
-            filesize = document.get(
-                "filesize",
-                0
-            )
-
-            filesize_kb = filesize / 1024
-
-            st.caption(
-                f"{filesize_kb:.1f} KB"
-            )
+            doc_col, del_col = st.columns([5, 1])
+            with doc_col:
+                st.write(document["original_filename"])
+                st.caption(f"{document.get('filesize', 0) / 1024:.1f} KB")
+            with del_col:
+                if st.button("🗑️", key=f"del_{document['id']}", help="Delete document"):
+                    ok, msg = delete_document(document["id"])
+                    if ok:
+                        quiz = st.session_state.get("quiz")
+                        if quiz and quiz.get("filename") == document["original_filename"]:
+                            for key in ("quiz", "quiz_answers", "quiz_submitted"):
+                                st.session_state.pop(key, None)
+                        st.session_state.summary = ""
+                        st.session_state.uploader_key = st.session_state.get("uploader_key", 0) + 1
+                        st.rerun()
+                    else:
+                        st.error(msg)
 
 st.subheader("Upload a document")
 
 files = st.file_uploader(
     "Upload a PDF or TXT file",
     type=["txt", "pdf"],
-    accept_multiple_files=True
+    accept_multiple_files=True,
+    key=f"uploader_{st.session_state.get('uploader_key', 0)}"
 )
 
 if files:
