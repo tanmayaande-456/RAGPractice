@@ -17,6 +17,8 @@ You have tools. Use them instead of guessing:
   It is slow and expensive, so never call it to answer a specific question.
 - generate_quiz: when the user wants to be quizzed, tested, or wants practice
   questions. It hands the job to a separate quiz agent.
+- list_past_quizzes: when the user asks which quizzes they have already taken.
+- quiz_stats: when the user asks how they are scoring or what to revise.
 
 Rules:
 - Answer only from tool results. Never use outside knowledge.
@@ -25,6 +27,41 @@ Rules:
 - Mention page numbers and filenames when relevant.
 - Keep answers concise.
 """
+
+PAST_QUIZZES_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "list_past_quizzes",
+        "description": (
+            "List the quizzes already generated for this user, with how many "
+            "times each was attempted and the best score. Use this when the "
+            "user asks about quizzes they have taken. Takes no arguments."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    },
+}
+
+QUIZ_STATS_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "quiz_stats",
+        "description": (
+            "Get the user's overall quiz performance: number of attempts, "
+            "average and best scores, and a per-document breakdown. Use this "
+            "when the user asks how they are doing, what they should revise, "
+            "or about their scores. Takes no arguments."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    },
+}
 
 TOOLS = [
     {
@@ -93,7 +130,8 @@ TOOLS = [
     },
 ]
 TOOLS.append(QUIZ_TOOL)
-
+TOOLS.append(PAST_QUIZZES_TOOL)
+TOOLS.append(QUIZ_STATS_TOOL)
 
 class DocumentAgent:
     def __init__(self, supabase, groq_client, embed_model, user_id):
@@ -266,6 +304,251 @@ class DocumentAgent:
         header = f"Summary of {document['original_filename']}:\n\n"
         return header + final_summary[:MAX_SUMMARY_RETURN_CHARS]
 
+    def _save_quiz(self, document, quiz):
+        response = (
+            self.supabase.table("quizzes")
+            .insert(
+                {
+                    "userId": self.user_id,
+                    "document_id": document["id"],
+                    "filename": quiz["filename"],
+                    "topic": quiz.get("topic"),
+                    "difficulty": quiz.get("difficulty"),
+                    "questions": quiz["questions"],
+                }
+            )
+            .execute()
+        )
+
+        if response.data:
+            return response.data[0]["id"]
+
+        return None
+
+    def get_past_quizzes(self, limit=25):
+        response = (
+            self.supabase.table("quizzes")
+            .select("id, filename, topic, difficulty, questions, created_at")
+            .eq("userId", self.user_id)
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+
+        return response.data or []
+
+    def get_quiz_by_id(self, quiz_id):
+        response = (
+            self.supabase.table("quizzes")
+            .select("id, filename, topic, difficulty, questions, created_at")
+            .eq("id", quiz_id)
+            .eq("userId", self.user_id)
+            .limit(1)
+            .execute()
+        )
+
+        if not response.data:
+            return None
+
+        return response.data[0]
+
+    def save_attempt(self, quiz_id, answers, score, total):
+        self.supabase.table("quiz_attempts").insert(
+            {
+                "quiz_id": quiz_id,
+                "userId": self.user_id,
+                "answers": {str(k): v for k, v in answers.items()},
+                "score": score,
+                "total": total,
+            }
+        ).execute()
+
+    def get_attempts(self, quiz_id):
+        response = (
+            self.supabase.table("quiz_attempts")
+            .select("score, total, completed_at")
+            .eq("quiz_id", quiz_id)
+            .eq("userId", self.user_id)
+            .order("completed_at", desc=True)
+            .execute()
+        )
+
+        return response.data or []
+
+    def get_all_attempts(self):
+        response = (
+            self.supabase.table("quiz_attempts")
+            .select(
+                "score, total, completed_at, quiz_id, "
+                "quizzes(filename, topic, difficulty)"
+            )
+            .eq("userId", self.user_id)
+            .order("completed_at", desc=False)
+            .execute()
+        )
+
+        return response.data or []
+
+    def get_quiz_stats(self):
+        attempts = self.get_all_attempts()
+
+        empty = {
+            "attempts": 0,
+            "quizzes_taken": 0,
+            "questions_answered": 0,
+            "correct": 0,
+            "average_percent": 0.0,
+            "best_percent": 0.0,
+            "latest_percent": 0.0,
+            "by_document": [],
+            "by_difficulty": [],
+            "history": [],
+        }
+
+        if not attempts:
+            return empty
+
+        total_score = 0
+        total_questions = 0
+        percents = []
+        documents = {}
+        difficulties = {}
+        history = []
+
+        for attempt in attempts:
+            score = attempt.get("score") or 0
+            total = attempt.get("total") or 0
+            if total <= 0:
+                continue
+
+            percent = 100.0 * score / total
+
+            total_score += score
+            total_questions += total
+            percents.append(percent)
+
+            quiz = attempt.get("quizzes") or {}
+            filename = quiz.get("filename", "Unknown document")
+            difficulty = quiz.get("difficulty") or "medium"
+
+            entry = documents.setdefault(
+                filename,
+                {"attempts": 0, "score": 0, "total": 0},
+            )
+            entry["attempts"] += 1
+            entry["score"] += score
+            entry["total"] += total
+
+            level = difficulties.setdefault(
+                difficulty,
+                {"attempts": 0, "score": 0, "total": 0},
+            )
+            level["attempts"] += 1
+            level["score"] += score
+            level["total"] += total
+
+            history.append(
+                {
+                    "completed_at": attempt.get("completed_at", ""),
+                    "filename": filename,
+                    "score": score,
+                    "total": total,
+                    "percent": round(percent, 1),
+                }
+            )
+
+        if not percents:
+            return empty
+
+        by_document = [
+            {
+                "filename": name,
+                "attempts": data["attempts"],
+                "percent": round(100.0 * data["score"] / data["total"], 1),
+                "score": data["score"],
+                "total": data["total"],
+            }
+            for name, data in documents.items()
+        ]
+        by_document.sort(key=lambda row: row["percent"])
+
+        by_difficulty = [
+            {
+                "difficulty": level,
+                "attempts": data["attempts"],
+                "percent": round(100.0 * data["score"] / data["total"], 1),
+            }
+            for level, data in difficulties.items()
+        ]
+
+        return {
+            "attempts": len(percents),
+            "quizzes_taken": len({a.get("quiz_id") for a in attempts}),
+            "questions_answered": total_questions,
+            "correct": total_score,
+            "average_percent": round(sum(percents) / len(percents), 1),
+            "best_percent": round(max(percents), 1),
+            "latest_percent": round(percents[-1], 1),
+            "by_document": by_document,
+            "by_difficulty": by_difficulty,
+            "history": history,
+        }
+
+    def tool_list_past_quizzes(self):
+        quizzes = self.get_past_quizzes()
+
+        if not quizzes:
+            return "No quizzes have been generated yet."
+
+        lines = []
+        for quiz in quizzes:
+            attempts = self.get_attempts(quiz["id"])
+            count = len(quiz.get("questions") or [])
+
+            if attempts:
+                best = max(attempt["score"] for attempt in attempts)
+                result = (
+                    f"{len(attempts)} attempt(s), best {best}/"
+                    f"{attempts[0]['total']}"
+                )
+            else:
+                result = "not attempted"
+
+            topic = f" on {quiz['topic']}" if quiz.get("topic") else ""
+
+            lines.append(
+                f"- {quiz['filename']}{topic} "
+                f"({quiz.get('difficulty', 'medium')}, {count} questions) "
+                f"- {result}, created {quiz['created_at'][:10]}"
+            )
+
+        return "Past quizzes:\n" + "\n".join(lines)
+
+    def tool_quiz_stats(self):
+        stats = self.get_quiz_stats()
+
+        if not stats["attempts"]:
+            return "The user has not completed any quizzes yet."
+
+        lines = [
+            f"Quizzes attempted: {stats['attempts']}",
+            f"Questions answered: {stats['questions_answered']}",
+            f"Correct: {stats['correct']}",
+            f"Average score: {stats['average_percent']}%",
+            f"Best score: {stats['best_percent']}%",
+            f"Most recent: {stats['latest_percent']}%",
+        ]
+
+        if stats["by_document"]:
+            lines.append("\nBy document (weakest first):")
+            for row in stats["by_document"]:
+                lines.append(
+                    f"- {row['filename']}: {row['percent']}% "
+                    f"over {row['attempts']} attempt(s)"
+                )
+
+        return "\n".join(lines)
+
     def tool_generate_quiz(
         self,
         filename,
@@ -295,6 +578,11 @@ class DocumentAgent:
 
         if quiz is None:
             return message
+
+        try:
+            quiz["id"] = self._save_quiz(document, quiz)
+        except Exception:
+            quiz["id"] = None
 
         self.last_quiz = quiz
         questions = quiz["questions"]
@@ -332,6 +620,10 @@ class DocumentAgent:
                     arguments.get("topic"),
                     arguments.get("difficulty", "medium"),
                 )
+            if name == "list_past_quizzes":
+                return self.tool_list_past_quizzes()
+            if name == "quiz_stats":
+                return self.tool_quiz_stats()
             return f"Unknown tool: {name}"
         except Exception as e:
             return f"Tool '{name}' failed: {e}"
