@@ -545,6 +545,35 @@ if documents:
 else:
     st.info("Upload a document first.")
 
+with st.expander("My quiz stats"):
+    stats = agent.get_quiz_stats()
+
+    if not stats["attempts"]:
+        st.info("Take a quiz to start building stats.")
+    else:
+        a, b, c = st.columns(3)
+        a.metric("Attempts", stats["attempts"])
+        b.metric("Average", f"{stats['average_percent']}%")
+        c.metric("Best", f"{stats['best_percent']}%")
+
+        st.caption(
+            f"{stats['correct']} correct out of "
+            f"{stats['questions_answered']} questions"
+        )
+
+        if len(stats["history"]) > 1:
+            st.line_chart(
+                {"Score %": [h["percent"] for h in stats["history"]]}
+            )
+
+        if stats["by_document"]:
+            st.markdown("**By document** (weakest first)")
+            for row in stats["by_document"]:
+                st.write(
+                    f"{row['filename']} — {row['percent']}% "
+                    f"({row['score']}/{row['total']}, "
+                    f"{row['attempts']} attempt(s))"
+                )
 if st.session_state.get("quiz"):
     quiz = st.session_state.quiz
     st.session_state.setdefault("quiz_answers", {})
@@ -563,6 +592,21 @@ if st.session_state.get("quiz"):
 
     if st.button("Submit answers"):
         st.session_state.quiz_submitted = True
+        if quiz.get("id"):
+            score = sum(
+                1
+                for i, q in enumerate(quiz["questions"])
+                if st.session_state.quiz_answers.get(i) == q["correct_index"]
+            )
+            try:
+                agent.save_attempt(
+                    quiz["id"],
+                    st.session_state.quiz_answers,
+                    score,
+                    len(quiz["questions"]),
+                )
+            except Exception as e:
+                st.warning(f"Could not save attempt: {e}")
 
     if st.session_state.get("quiz_submitted"):
         score = 0
