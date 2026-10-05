@@ -423,7 +423,7 @@ with st.sidebar:
 
     documents = get_documents()
 
-        if documents:
+    if documents:
         for document in documents:
             doc_col, del_col = st.columns([5, 1])
             with doc_col:
