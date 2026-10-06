@@ -3,7 +3,6 @@ from io import BytesIO
 from supabase import create_client
 import extra_streamlit_components as stx
 
-# import chromadb
 from sentence_transformers import SentenceTransformer
 from groq import Groq
 import streamlit as st
@@ -106,7 +105,6 @@ else:
                     st.write("Please check email for confirmation")
                 except Exception as e:
                     st.error(f"Failed to create account. Error: {e}")
-                    # st.exception(e)
     st.stop()
 
 USER_ID=st.session_state.user.id
@@ -470,7 +468,6 @@ if files:
                 f"Error processing {file.name}: {e}"
             )
 
-#
 if "summary" not in st.session_state:
     st.session_state.summary = ""
 st.subheader("Summarize a document")
@@ -532,13 +529,6 @@ if documents:
                     st.error("Could not generate a quiz from that document.")
             except Exception as e:
                 st.error(f"Could not generate quiz: {e}")
-    # if st.button("Summarize"):
-    #     try:
-    #         result=agent.tool_summarize_document(selected_file)
-    #         st.session_state.summary = result
-    #     except Exception as e:
-    #         st.error(f"Could not generate summary: {e}")
-            # st.exception(e)
     if st.session_state.summary:
         st.subheader("Summary")
         st.write(st.session_state.summary)
@@ -686,11 +676,7 @@ if query:
                 answer = f"Something went wrong: {e}"
                 status.update(label="Failed", state="error")
         st.markdown(answer)
-    # if agent.last_quiz:
-    #     st.session_state.quiz = agent.last_quiz
-    #     st.session_state.quiz_answers = {}
-    #     st.session_state.quiz_submitted = False
-
+        
     save_message(current_chat_id, "assistant", answer)
     if agent.last_quiz:
         st.session_state.quiz = agent.last_quiz
