@@ -584,12 +584,6 @@ class DocumentAgent:
         document, error = self._resolve_document(filename)
         if document is None:
             return error
-        # document = self._resolve_document(filename)
-        # if document is None:
-        #     return (
-        #         f"Could not find a document called '{filename}'.\n"
-        #         + self.tool_list_documents()
-        #     )
 
         def forward_step(name, arguments):
             if self._on_step:
