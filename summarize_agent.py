@@ -26,6 +26,10 @@ Rules:
   "I could not find that information in the documents."
 - Mention page numbers and filenames when relevant.
 - Keep answers concise.
+- When calling summarize_document or generate_quiz, pass the document's id
+  from list_documents, not its filename.
+- If a tool says several documents share a name, ask the user which one
+  they mean (by upload date) instead of picking one.
 """
 
 PAST_QUIZZES_TOOL = {
@@ -120,7 +124,7 @@ TOOLS = [
                         "type": "string",
                         "description": (
                             "Filename of the document, as returned by "
-                            "list_documents."
+                            "list_documents (preferred), or its filename."
                         ),
                     },
                 },
@@ -153,26 +157,46 @@ class DocumentAgent:
         )
         return response.data or []
 
-    def _resolve_document(self, filename):
+    def _resolve_document(self, name_or_id):
         documents = self._get_documents()
         if not documents:
-            return None
+            return None, "No documents have been uploaded."
 
-        wanted = (filename or "").strip().lower()
+        wanted = (name_or_id or "").strip()
 
         for document in documents:
-            if document["original_filename"].lower() == wanted:
-                return document
+            if document["id"] == wanted:
+                return document, None
 
-        matches = [
+        exact = [
             document
             for document in documents
-            if wanted and wanted in document["original_filename"].lower()
+            if document["original_filename"].lower() == wanted.lower()
         ]
-        if len(matches) == 1:
-            return matches[0]
+        partial = [
+            document
+            for document in documents
+            if wanted and wanted.lower() in document["original_filename"].lower()
+        ]
+        matches = exact or partial
 
-        return None
+        if len(matches) == 1:
+            return matches[0], None
+
+        if len(matches) > 1:
+            options = "\n".join(
+                f"- {d['original_filename']} (uploaded {d['uploaded_at'][:10]}, id: {d['id']})"
+                for d in matches
+            )
+            return None, (
+                f"Several documents match '{name_or_id}':\n{options}\n"
+                "Ask the user which one they mean."
+            )
+
+        return None, (
+            f"Could not find a document called '{name_or_id}'.\n"
+            + self.tool_list_documents()
+        )
 
     def tool_list_documents(self):
         documents = self._get_documents()
@@ -183,7 +207,8 @@ class DocumentAgent:
         for document in documents:
             size_kb = document.get("filesize", 0) / 1024
             lines.append(
-                f"- {document['original_filename']} ({size_kb:.1f} KB)"
+                f"- {document['original_filename']} ({size_kb:.1f} KB),"
+              f"id: {document['id']})"
             )
         return "Uploaded documents:\n" + "\n".join(lines)
 
@@ -222,8 +247,7 @@ class DocumentAgent:
     def tool_summarize_document(self, filename):
         document = self._resolve_document(filename)
         if document is None:
-            available = self.tool_list_documents()
-            return f"Could not find a document called '{filename}'.\n{available}"
+          return error
 
         response = (
             self.supabase.table("document_chunks")
@@ -557,12 +581,15 @@ class DocumentAgent:
         difficulty="medium",
     ):
         """Hand off to QuizAgent, which runs its own loop."""
-        document = self._resolve_document(filename)
+        document, error = self._resolve_document(filename)
         if document is None:
-            return (
-                f"Could not find a document called '{filename}'.\n"
-                + self.tool_list_documents()
-            )
+            return error
+        # document = self._resolve_document(filename)
+        # if document is None:
+        #     return (
+        #         f"Could not find a document called '{filename}'.\n"
+        #         + self.tool_list_documents()
+        #     )
 
         def forward_step(name, arguments):
             if self._on_step:
@@ -584,6 +611,7 @@ class DocumentAgent:
         except Exception:
             quiz["id"] = None
 
+        quiz["document_id"] = document["id"]
         self.last_quiz = quiz
         questions = quiz["questions"]
 
