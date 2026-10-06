@@ -432,7 +432,7 @@ with st.sidebar:
                     ok, msg = delete_document(document["id"])
                     if ok:
                         quiz = st.session_state.get("quiz")
-                        if quiz and quiz.get("filename") == document["original_filename"]:
+                        if quiz and quiz.get("document_id") == document["id"]:
                             for key in ("quiz", "quiz_answers", "quiz_submitted"):
                                 st.session_state.pop(key, None)
                         st.session_state.summary = ""
