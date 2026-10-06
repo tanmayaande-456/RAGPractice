@@ -479,14 +479,6 @@ if documents:
         format_func=lambda d: f"{d['original_filename']} ({d['uploaded_at'][:10]})",
     )
     selected_id = selected_doc["id"]
-    # filenames = [
-    #     document["original_filename"]
-    #     for document in documents
-    # ]
-    # selected_file = st.selectbox(
-    #     "Select a document",
-    #     filenames
-    # )
     col_a, col_b = st.columns(2)
     with col_a:
         num_questions = st.slider("Number of questions", 1, 15, 5)
@@ -509,7 +501,6 @@ if documents:
         if st.button("Summarize", use_container_width=True):
             try:
                 result = agent.tool_summarize_document(selected_id)
-                # result = agent.tool_summarize_document(selected_file)
                 st.session_state.summary = result
             except Exception as e:
                 st.error(f"Could not generate summary: {e}")
