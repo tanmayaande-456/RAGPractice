@@ -17,15 +17,25 @@ QUIZ_TOOL = {
             "quizzed or tested, or wants practice questions. Do not use it to "
             "answer questions about document content - use search_documents "
             "for that."
+            "Identify the document by document_id (preferred) or "
+            "filename; at least one is required."
         ),
         "parameters": {
             "type": "object",
             "properties": {
+                "document_id": {
+                    "type": "string",
+                    "description": (
+                        "ID of the document to build the quiz from, as "
+                        "returned by list_documents. Preferred over filename, "
+                        "since filenames may not be unique."
+                    ),
+                },
                 "filename": {
                     "type": "string",
                     "description": (
-                        "Filename of the document to build the quiz from, "
-                        "as returned by list_documents."
+                        "Filename of the document, as returned by "
+                        "list_documents. Use only if document_id is unknown."
                     ),
                 },
                 "num_questions": {
@@ -46,7 +56,7 @@ QUIZ_TOOL = {
                     "description": "Default medium.",
                 },
             },
-            "required": ["filename"],
+            "required": [],
         },
     },
 }
@@ -315,11 +325,10 @@ class QuizAgent:
             },
         ).execute()
 
-        filename = self._document["original_filename"]
         rows = [
             row
             for row in results.data or []
-            if row.get("Filename") == filename
+            if self.row_in_document(row)
             and row.get("similarity", 0) >= 0.3
         ][:match_count]
 
@@ -376,6 +385,7 @@ class QuizAgent:
             return f"Tool '{name}' failed: {e}"
     def _finish(self, topic, difficulty, questions):
         quiz = {
+            "document_id": self._document["id"]
             "filename": self._document["original_filename"],
             "topic": topic,
             "difficulty": difficulty,
@@ -411,7 +421,7 @@ class QuizAgent:
 
         task = (
             f"Document: {document['original_filename']} "
-            f"({len(self._chunks)} chunks)\n"
+            f"(ID {document['id']}, {len(self._chunks)} chunks)\n"
             f"Number of questions: {num_questions}\n"
             f"Difficulty: {difficulty}\n"
             + (
