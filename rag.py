@@ -1,18 +1,115 @@
-import chromadb
-# import os
-# from dotenv import load_dotenv
+import hashlib
+from io import BytesIO
+from supabase import create_client
+import extra_streamlit_components as stx
+
 from sentence_transformers import SentenceTransformer
 from groq import Groq
 import streamlit as st
 import nltk
 from nltk.tokenize import sent_tokenize
 from pypdf import PdfReader
-from sklearn.metrics.pairwise import cosine_similarity
 import tiktoken
 
-# load_dotenv()
-# GROQ_API_KEY=os.getenv("GROQ_API_KEY")
 GROQ_API_KEY=st.secrets["GROQ_API_KEY"]
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+SUPABASE_STORAGE_BUCKET = st.secrets["SUPABASE_STORAGE_BUCKET"]
+
+@st.cache_resource
+def get_supabase():
+    return create_client(
+        SUPABASE_URL,
+        SUPABASE_KEY
+    )
+
+
+@st.cache_resource
+def get_groq():
+    return Groq(
+        api_key=GROQ_API_KEY
+    )
+
+
+@st.cache_resource
+def get_embedding_model():
+    return SentenceTransformer(
+        "all-MiniLM-L6-v2"
+    )
+
+cookies = stx.CookieManager(key="auth_cookies")
+
+supabase = get_supabase()
+groq_client = get_groq()
+model=get_embedding_model()
+
+if "user" not in st.session_state:
+    st.session_state.user=None
+
+if st.session_state.user is None:
+    refresh_token = cookies.get("sb_refresh_token")
+    if refresh_token:
+        try:
+            restored = supabase.auth.refresh_session(refresh_token)
+            if restored and restored.user:
+                st.session_state.user = restored.user
+                cookies.set(
+                    "sb_refresh_token",
+                    restored.session.refresh_token,
+                    key="set_refresh",
+                )
+        except Exception:
+            cookies.delete("sb_refresh_token", key="del_refresh")
+
+if st.session_state.user is not None:
+    name=st.session_state.user.user_metadata.get("name", "User")
+    a, b=st.columns([7, 2])
+    with a:
+        st.write(f"User: {name}")
+    with b:
+        if (st.button("Log out")):
+            supabase.auth.sign_out()
+            cookies.delete("sb_refresh_token", key="logout_cookie")
+            st.session_state.user=None
+            st.rerun()
+else:
+    st.title("Log in/Sign up")
+    login, signup=st.tabs(["Log in", "Sign up"])
+    with login:
+        st.header("Log in")
+        email=st.text_input("Email", key="login_email")
+        password=st.text_input("Password", type="password", key="login_password")
+        if (st.button("Log in!", key="login_btn")):
+            try:
+                response=supabase.auth.sign_in_with_password({"email": email, "password": password})
+                st.session_state.user=response.user
+                cookies.set("sb_refresh_token", response.session.refresh_token, key="login_cookie",
+                )
+                st.success("Logged in!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Log in failed. Error: {e}")
+    with signup:
+        st.header("Create account")
+        name=st.text_input("Name", key="signup_name")
+        email=st.text_input("Email", key="signup_email")
+        password=st.text_input("Password", type="password", key="signup_password")
+        confirm_password=st.text_input("Confirm Password", type="password", key="signup_confirm_password")
+        if (st.button("Sign up", key="signup_btn")):
+            if (password != confirm_password):
+                st.error("Passwords do not match")
+            else:
+                try:
+                    response=supabase.auth.sign_up({"email": email, "password": password, "options": {"data": {"name": name}}})
+                    st.success("Account created!")
+                    st.write("Please check email for confirmation")
+                except Exception as e:
+                    st.error(f"Failed to create account. Error: {e}")
+    st.stop()
+
+USER_ID=st.session_state.user.id
+from summarize_agent import build_agent
+agent = build_agent(supabase, groq_client, model, USER_ID)
 
 st.title("Chatbot")
 
@@ -20,49 +117,12 @@ encoding=tiktoken.get_encoding("gpt2")
 def count_tokens(text):
     return len(encoding.encode(text))
 
-if "chats" not in st.session_state:
-    st.session_state.chats={
-        "Chat 1": []
-    }
+MAX_TOKENS = 100000
+def load_text(file_bytes):
+    return file_bytes.decode("utf-8")
 
-if "current_chat" not in st.session_state:
-    st.session_state.current_chat="Chat 1"
-
-if "chat_tokens" not in st.session_state:
-    st.session_state.chat_tokens = {
-        "Chat 1": 0
-    }
-
-MAX_TOKENS = 10000
-current_chat = st.session_state.current_chat
-if st.session_state.chat_tokens[current_chat] >= MAX_TOKENS:
-    st.error(
-        "Token limit reached. Please create a new chat."
-    )
-    st.stop()
-
-files=st.file_uploader(
-    "Upload a PDF or TXT file",
-    type=["txt", "pdf"],
-    accept_multiple_files=True
-)
-
-def evaluate_answer(answer, ground_truth, model):
-    answer_embedding = model.encode(answer)
-    truth_embedding = model.encode(ground_truth)
-
-    similarity = cosine_similarity(
-        [answer_embedding],
-        [truth_embedding]
-    )[0][0]
-
-    return similarity
-
-def load_text(file):
-    return file.read().decode("utf-8")
-
-def loadpdf(file):
-    read=PdfReader(file)
+def loadpdf(file_bytes):
+    read=PdfReader(BytesIO(file_bytes))
     pages=[]
     for pagenumber, page in enumerate(read.pages, start=1):
         extract=page.extract_text()
@@ -73,8 +133,6 @@ def loadpdf(file):
             })
     return pages
 
-# nltk.download('punkt')
-import nltk
 
 try:
     nltk.data.find('tokenizers/punkt')
@@ -84,6 +142,99 @@ try:
     nltk.data.find('tokenizers/punkt_tab')
 except LookupError:
     nltk.download('punkt_tab')
+
+def get_chats():
+    response=(
+        supabase.table("chats").select("*").eq("userId", USER_ID).order("created_at").execute()
+    )
+    return response.data or []
+
+def create_chat():
+    chats=get_chats()
+    chat_number=len(chats)+1
+    title=f"Chat {chat_number}"
+    response=(
+        supabase.table("chats").insert({"userId": USER_ID, "title": title}).execute()
+    )
+    return response.data[0]
+
+def get_messages(chat_id):
+
+    response = (
+        supabase
+        .table("messages")
+        .select("id, created_at, chat_id, role, content")
+        .eq("chat_id", chat_id)
+        .order("created_at")
+        .execute()
+    )
+
+    return response.data or []
+
+def save_message(chat_id,role,content):
+    supabase.table("messages").insert({
+            "chat_id": chat_id,
+            "role": role,
+            "content": content
+        }).execute()
+
+def get_chat_token_count(chat_id):
+
+    messages = get_messages(chat_id)
+
+    total = 0
+
+    for message in messages:
+
+        total += count_tokens(
+            message["content"]
+        )
+
+    return total
+
+def get_documents():
+
+    response = (
+        supabase
+        .table("documents")
+        .select("*")
+        .eq("userId", USER_ID)
+        .order("uploaded_at", desc=True)
+        .execute()
+    )
+
+    return response.data or []
+
+def get_document_by_id(document_id):
+
+    response = (
+        supabase
+        .table("documents")
+        .select("*")
+        .eq("id", document_id)
+        .eq("userId", USER_ID)
+        .limit(1)
+        .execute()
+    )
+
+    if not response.data:
+        return None
+
+    return response.data[0]
+
+def document_exists_by_hash(file_hash):
+
+    documents = get_documents()
+
+    for document in documents:
+
+        if document.get("storage_filename") == file_hash:
+
+            return document
+
+    return None
+
+
 
 def chunk_text(text, chunk_size=5):
     sentences = sent_tokenize(text)
@@ -109,233 +260,427 @@ def chunk_pdf(pages, chunk_size=5):
                 "Text": chunk
             })
     return chunks
-    
+
+def process_document(file):
+    file_bytes = file.getvalue()
+    file_hash = hashlib.sha256(file_bytes).hexdigest()
+    existing_document = (document_exists_by_hash(file_hash))
+
+    if existing_document:
+        return (False,f"{file.name} has already been uploaded.")
+
+    if file.type == "text/plain":
+        text = load_text(file_bytes)
+        chunks = chunk_text(text)
+    elif file.type == "application/pdf":
+        pages = loadpdf(file_bytes)
+        chunks = chunk_pdf(pages)
+    else:
+        return (
+            False,
+            "Only PDF and TXT files are supported."
+        )
+
+    if not chunks:
+        return (
+            False,
+            "No text could be extracted from this file."
+        )
+    document_id = file_hash
+    storage_filename = file_hash
+    storage_path = (
+        f"{USER_ID}/{file_hash}_{file.name}"
+    )
+    supabase.storage \
+        .from_(SUPABASE_STORAGE_BUCKET) \
+        .upload(
+            storage_path,
+            file_bytes,
+            {
+                "content-type": file.type,
+                "upsert": "false"
+            }
+        )
+    texts = [
+        chunk["Text"]
+        for chunk in chunks
+    ]
+
+    embeddings = model.encode(
+        texts,
+        show_progress_bar=False
+    )
+
+    supabase.table("documents").insert({
+            "id": document_id,
+            "userId": USER_ID,
+            "original_filename": file.name,
+            "storage_path": storage_path,
+            "storage_filename": storage_filename,
+            "mime_type": file.type,
+            "filesize": len(file_bytes)
+        }).execute()
+    chunk_rows=[]
+    for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+        chunk_id=f"{document_id}_{i}"
+        chunk_rows.append({"id": chunk_id, "document_id": document_id, "userId": USER_ID, "content": chunk["Text"], "embedding": embedding.tolist(), "Filename": file.name, "pagenumber": chunk["Page number"]})
+
+    supabase.table("document_chunks").insert(chunk_rows).execute()
+
+    return (
+        True,
+        f"Uploaded and processed {file.name}"
+    )
+def delete_document(document_id):
+    document = get_document_by_id(document_id)
+    if not document:
+        return (False, "Document not found.")
+
+    supabase.table("document_chunks") \
+        .delete() \
+        .eq("document_id", document_id) \
+        .eq("userId", USER_ID) \
+        .execute()
+
+    supabase.table("documents") \
+        .delete() \
+        .eq("id", document_id) \
+        .eq("userId", USER_ID) \
+        .execute()
+
+    try:
+        supabase.storage \
+            .from_(SUPABASE_STORAGE_BUCKET) \
+            .remove([document["storage_path"]])
+    except Exception as e:
+        return (True, f"Deleted {document['original_filename']}, but the stored file could not be removed: {e}")
+
+    return (True, f"Deleted {document['original_filename']}")
+
+chats = get_chats()
+
+if not chats:
+    new_chat = create_chat()
+    chats = [new_chat]
+
+if "current_chat_id" not in st.session_state:
+    st.session_state.current_chat_id = chats[0]["id"]
+
+chat_ids = [chat["id"] for chat in chats]
+
+if st.session_state.current_chat_id not in chat_ids:
+    st.session_state.current_chat_id = chats[0]["id"]
+
+current_chat_id = st.session_state.current_chat_id
+
 with st.sidebar:
     st.title("All Chats")
-    if st.button("New Chat"):
-        new_chat = f"Chat {len(st.session_state.chats)+1}"
-        st.session_state.chats[new_chat] = []
-        st.session_state.chat_tokens[new_chat] = 0
-        st.session_state.current_chat = new_chat
-    for chat_name in list(st.session_state.chats.keys()):
-        if st.button(chat_name, use_container_width=True, key=chat_name):
-            st.session_state.current_chat = chat_name
+
+    if st.button(
+        "New Chat",
+        use_container_width=True
+    ):
+        new_chat = create_chat()
+
+        st.session_state.current_chat_id = (
+            new_chat["id"]
+        )
+
+        st.rerun()
+
+    st.divider()
+
+    chats = get_chats()
+
+    for chat in chats:
+        chat_id = chat["id"]
+        title = chat["title"]
+
+        is_current = (
+            chat_id
+            == st.session_state.current_chat_id
+        )
+
+        button_label = (
+            f"{title}"
+            if is_current
+            else title
+        )
+
+        if st.button(
+            button_label,
+            use_container_width=True,
+            key=f"chat_{chat_id}"
+        ):
+            st.session_state.current_chat_id = chat_id
+            st.rerun()
+
+    st.divider()
+
+    st.title("Documents")
+
+    documents = get_documents()
+
+    if documents:
+        for document in documents:
+            doc_col, del_col = st.columns([5, 1])
+            with doc_col:
+                st.write(document["original_filename"])
+                st.caption(f"{document.get('filesize', 0) / 1024:.1f} KB")
+            with del_col:
+                if st.button("🗑️", key=f"del_{document['id']}", help="Delete document"):
+                    ok, msg = delete_document(document["id"])
+                    if ok:
+                        quiz = st.session_state.get("quiz")
+                        if quiz and quiz.get("document_id") == document["id"]:
+                            for key in ("quiz", "quiz_answers", "quiz_submitted"):
+                                st.session_state.pop(key, None)
+                        st.session_state.summary = ""
+                        st.session_state.uploader_key = st.session_state.get("uploader_key", 0) + 1
+                        st.rerun()
+                    else:
+                        st.error(msg)
+
+st.subheader("Upload a document")
+
+files = st.file_uploader(
+    "Upload a PDF or TXT file",
+    type=["txt", "pdf"],
+    accept_multiple_files=True,
+    key=f"uploader_{st.session_state.get('uploader_key', 0)}"
+)
 
 if files:
-    allchunks=[]
     for file in files:
-        if file.type=="text/plain": 
-            text=load_text(file)
-            chunks=chunk_text(text)
-        elif file.type=="application/pdf":
-            pages=loadpdf(file)
-            chunks=chunk_pdf(pages)
-        else:
-            st.error("Only upload text or PDF files")
-            continue
-        for chunk in chunks:
-            chunk["Filename"]=file.name
-            allchunks.append(chunk)
-        model = SentenceTransformer("all-MiniLM-L6-v2")
-        client = chromadb.PersistentClient()
         try:
-            collection = client.get_collection(name="rag_collection")
-        except:
-            collection=client.create_collection(name="rag_collection")
-        # collection.delete(
-        #     ids=collection.get()["ids"]
-        # )
+            with st.spinner(
+                f"Processing {file.name}..."
+            ):
+                added, message = process_document(file)
 
-        ids=collection.get()["ids"]
-        if ids:
-            collection.delete(ids)
-
-        for i, chunk_data in enumerate(allchunks):
-            embedding = model.encode(chunk_data["Text"])
-            collection.add(
-                documents=[chunk_data["Text"]],
-                embeddings=[embedding.tolist()],
-                ids=[f"{chunk_data['Filename']}_{i}"],
-                metadatas=[{
-                    "Page number": chunk_data["Page number"],
-                    "Filename": chunk_data["Filename"]
-                }]
-            )
-        def retrieve(query, k=5):
-            query_embedding = model.encode([query])[0]
-            results = collection.query(
-                query_embeddings=[query_embedding.tolist()],
-                n_results=k
-            )
-            documents=results["documents"][0]
-            distances=results["distances"][0]
-            metadata=results["metadatas"][0]
-
-            return documents, distances, metadata
-
-        messages=st.session_state.chats[st.session_state.current_chat]
-
-        for message in messages:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
-        query = st.chat_input("Ask something about the document")
-        # user_tokens = count_tokens(query)
-        if query:
-            user_tokens=count_tokens(query)
-            st.session_state.chat_tokens[current_chat]+=user_tokens
-
-        # st.session_state.chat_tokens[
-        #     st.session_state.current_chat
-        # ] += user_tokens
-
-        # st.session_state.chat_tokens[
-        #     st.session_state.current_chat
-        # ] += user_tokens
-                
-            messages.append({
-                "role": "user",
-                "content": query
-            })
-            with st.chat_message("user"):
-                st.markdown(query)
-            chunk, distance, metadata = retrieve(query)
-            if distance[0] > 3:
-                answer = "I could not find that information in the document."
+            if added:
+                st.success(message)
             else:
-                context = ""
-                for ch, data in zip(chunk, metadata):
-                    context += f"[Page {data['Page number']}]\n{ch}\nFilename: {data['Filename']}\n\n"
-                prompt = f"""
-                    You are a retrieval-based chatbot.
+                st.info(message)
 
-                    Answer ONLY from the provided context.
+        except Exception as e:
+            st.error(
+                f"Error processing {file.name}: {e}"
+            )
 
-                    If the answer is not present in the context, say:
-                    "I could not find that information in the document."
+if "summary" not in st.session_state:
+    st.session_state.summary = ""
+st.subheader("Summarize a document")
+documents = get_documents()
+if documents:
+    selected_doc = st.selectbox(
+        "Select a document",
+        documents,
+        format_func=lambda d: f"{d['original_filename']} ({d['uploaded_at'][:10]})",
+    )
+    selected_id = selected_doc["id"]
+    col_a, col_b = st.columns(2)
+    with col_a:
+        num_questions = st.slider("Number of questions", 1, 15, 5)
+    with col_b:
+        difficulty = st.radio(
+            "Difficulty",
+            options=["easy", "medium", "hard"],
+            index=1,
+            horizontal=True,
+        )
+        
+    topic = st.text_input(
+        "Focus on a topic (optional)",
+        placeholder="e.g. dynamic programming",
+    )
 
-                    Mention page numbers when relevant.
+    col_c, col_d = st.columns(2)
 
-                    Do not use outside knowledge.
-                    Do not make assumptions.
-                    Keep answers concise.
+    with col_c:
+        if st.button("Summarize", use_container_width=True):
+            try:
+                result = agent.tool_summarize_document(selected_id)
+                st.session_state.summary = result
+            except Exception as e:
+                st.error(f"Could not generate summary: {e}")
 
-                    Context:
-                    {context}
-
-                    Question:
-                    {query}
-                    """
-                groq_client = Groq(api_key=GROQ_API_KEY)
-                response = groq_client.chat.completions.create(
-                    model="llama-3.1-8b-instant",
-                    messages=[{"role": "user", "content": prompt}]
-                )
-                answer = response.choices[0].message.content
-                answer_tokens = count_tokens(answer)
-
-                st.session_state.chat_tokens[
-                    st.session_state.current_chat
-                ] += answer_tokens
-            messages.append({
-                "role": "assistant",
-                "content": answer
-            })
-            with st.chat_message("assistant"):
-                st.markdown(answer)
+    with col_d:
+        if st.button("Generate quiz", use_container_width=True):
+            try:
+                with st.spinner("Writing questions..."):
+                    agent.tool_generate_quiz(
+                        selected_id,
+                        num_questions=num_questions,
+                        topic=topic.strip() or None,
+                        difficulty=difficulty,
+                    )
+                if agent.last_quiz:
+                    st.session_state.quiz = agent.last_quiz
+                    st.session_state.quiz_answers = {}
+                    st.session_state.quiz_submitted = False
+                    for key in list(st.session_state.keys()):
+                        if key.startswith("quiz_q_"):
+                            del st.session_state[key]
+                    st.rerun()
+                else:
+                    st.error("Could not generate a quiz from that document.")
+            except Exception as e:
+                st.error(f"Could not generate quiz: {e}")
+    if st.session_state.summary:
+        st.subheader("Summary")
+        st.write(st.session_state.summary)
 else:
-    st.info("Please input a file")
+    st.info("Upload a document first.")
 
+with st.expander("My quiz stats"):
+    stats = agent.get_quiz_stats()
 
+    if not stats["attempts"]:
+        st.info("Take a quiz to start building stats.")
+    else:
+        a, b, c = st.columns(3)
+        a.metric("Attempts", stats["attempts"])
+        b.metric("Average", f"{stats['average_percent']}%")
+        c.metric("Best", f"{stats['best_percent']}%")
 
+        st.caption(
+            f"{stats['correct']} correct out of "
+            f"{stats['questions_answered']} questions"
+        )
 
+        if len(stats["history"]) > 1:
+            st.line_chart(
+                {"Score %": [h["percent"] for h in stats["history"]]}
+            )
 
+        if stats["by_document"]:
+            st.markdown("**By document** (weakest first)")
+            for row in stats["by_document"]:
+                st.write(
+                    f"{row['filename']} — {row['percent']}% "
+                    f"({row['score']}/{row['total']}, "
+                    f"{row['attempts']} attempt(s))"
+                )
+if st.session_state.get("quiz"):
+    quiz = st.session_state.quiz
+    st.session_state.setdefault("quiz_answers", {})
+    st.subheader(f"Quiz: {quiz['filename']}")
 
+    for i, question in enumerate(quiz["questions"]):
+        st.markdown(f"**{i + 1}. {question['question']}**")
+        st.session_state.quiz_answers[i] = st.radio(
+            "Select an answer",
+            options=range(len(question["options"])),
+            format_func=lambda x, q=question: q["options"][x],
+            index=None,
+            key=f"quiz_q_{i}",
+            label_visibility="collapsed",
+        )
 
+    if st.button("Submit answers"):
+        st.session_state.quiz_submitted = True
+        if quiz.get("id"):
+            score = sum(
+                1
+                for i, q in enumerate(quiz["questions"])
+                if st.session_state.quiz_answers.get(i) == q["correct_index"]
+            )
+            try:
+                agent.save_attempt(
+                    quiz["id"],
+                    st.session_state.quiz_answers,
+                    score,
+                    len(quiz["questions"]),
+                )
+            except Exception as e:
+                st.warning(f"Could not save attempt: {e}")
 
+    if st.session_state.get("quiz_submitted"):
+        score = 0
+        for i, question in enumerate(quiz["questions"]):
+            chosen = st.session_state.quiz_answers.get(i)
+            correct = question["correct_index"]
+            if chosen == correct:
+                score += 1
+                st.success(f"{i + 1}. Correct")
+            else:
+                st.error(
+                    f"{i + 1}. Answer: {question['options'][correct]}"
+                )
+            if question["explanation"]:
+                st.caption(question["explanation"])
 
+        st.subheader(f"Score: {score}/{len(quiz['questions'])}")
 
+    if st.button("Clear quiz"):
+        for key in ("quiz", "quiz_answers", "quiz_submitted"):
+            st.session_state.pop(key, None)
+        st.rerun()
 
+chat_tokens = get_chat_token_count(
+    current_chat_id
+)
 
+if chat_tokens >= MAX_TOKENS:
+    st.error(
+        "Token limit reached. "
+        "Please create a new chat."
+    )
+    st.stop()
 
+messages = get_messages(
+    current_chat_id
+)
 
+for message in messages:
+    with st.chat_message(
+        message["role"]
+    ):
+        st.markdown(
+            message["content"]
+        )
 
+query = st.chat_input(
+    "Ask something about the document..."
+)
+if query:
+    user_tokens = count_tokens(query)
 
+    if chat_tokens + user_tokens >= MAX_TOKENS:
+        st.error(
+            "This message would exceed the token limit. "
+            "Please create a new chat."
+        )
+        st.stop()
 
+    save_message(
+        current_chat_id,
+        "user",
+        query
+    )
 
+    with st.chat_message("user"):
+        st.markdown(query)
 
-# model = SentenceTransformer("all-MiniLM-L6-v2")
-# embeddings = model.encode(chunks)
-
-# client = chromadb.PersistentClient()
-# try:
-#     collection = client.get_collection(name="rag_collection")
-# except:
-#     collection=client.create_collection(name="rag_collection")
-#     # for i, chunk in enumerate(chunks):
-#     #     collection.add(
-#     #         documents=[chunk],
-#     #         embeddings=[embeddings[i].tolist()],
-#     #         ids=[str(i)]
-#     #     )
-
-# if collection.count() == 0:
-#     embeddings = model.encode(chunks)
-#     for i, chunk in enumerate(chunks):
-#         collection.add(
-#             documents=[chunk],
-#             embeddings=[embeddings[i].tolist()],
-#             ids=[str(i)]
-#         )
-
-# def retrieve(query, k=70):
-#     query_embedding = model.encode([query])[0]
-#     results = collection.query(
-#         query_embeddings=[query_embedding.tolist()],
-#         n_results=k
-#     )
-#     documents=results["documents"][0]
-#     distances=results["distances"][0]
-
-#     return documents, distances
-
-# query=st.text_input("Question: ")
-
-# if st.button("Ask"):
-#     if (query.strip()==""):
-#         st.warning("Please enter a question")
-#     else:
-#         retrieved_chunks, distances=retrieve(query)
-#         print(distances[0])
-#         print("\n\n")
-#         if (distances[0]>1.2):
-#             st.write("Could not find info\n")
-#             st.stop()
-#         context = "\n\n".join(retrieved_chunks)
-#         prompt = f"""
-#             You are a retrieval-based chatbot.
-
-#             Answer ONLY from the provided context.
-
-#             If the answer is not present in the context, say:
-#             "I could not find that information in the document."
-
-#             Do not use outside knowledge.
-#             Do not make assumptions.
-#             Keep answers concise.
-
-#             Context:
-#             {context}
-
-#             Question:
-#             {query}
-#             """
-#         client=Groq(api_key=GROQ_API_KEY)
-#         response = client.chat.completions.create(
-#         model="llama-3.1-8b-instant",
-#             messages=[
-#                 {"role": "user", "content": prompt}
-#             ]
-#         )
-#         answer=response.choices[0].message.content
-#         st.subheader("Answer:\n")
-#         st.write(answer)
+    with st.chat_message("assistant"):
+        with st.status("Thinking...") as status:
+            def on_step(name, args):
+                status.write(f"`{name}` {args}")
+            try:
+                answer = agent.run(query, history=messages, on_step=on_step)
+                status.update(label="Done", state="complete")
+            except Exception as e:
+                answer = f"Something went wrong: {e}"
+                status.update(label="Failed", state="error")
+        st.markdown(answer)
+        
+    save_message(current_chat_id, "assistant", answer)
+    if agent.last_quiz:
+        st.session_state.quiz = agent.last_quiz
+        st.session_state.quiz_answers = {}
+        st.session_state.quiz_submitted = False
+        for key in list(st.session_state.keys()):
+            if key.startswith("quiz_q_"):
+                del st.session_state[key]
+        st.rerun()
