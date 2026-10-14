@@ -562,8 +562,12 @@ with st.expander("My quiz stats"):
                     f"({row['score']}/{row['total']}, "
                     f"{row['attempts']} attempt(s))"
                 )
-if st.session_state.get("quiz"):
-    quiz = st.session_state.quiz
+
+def render_quiz():
+    quiz = st.session_state.get("quiz")
+    if not quiz:
+        return
+
     st.session_state.setdefault("quiz_answers", {})
     st.subheader(f"Quiz: {quiz['filename']}")
 
@@ -605,9 +609,7 @@ if st.session_state.get("quiz"):
                 score += 1
                 st.success(f"{i + 1}. Correct")
             else:
-                st.error(
-                    f"{i + 1}. Answer: {question['options'][correct]}"
-                )
+                st.error(f"{i + 1}. Answer: {question['options'][correct]}")
             if question["explanation"]:
                 st.caption(question["explanation"])
 
@@ -618,6 +620,62 @@ if st.session_state.get("quiz"):
             st.session_state.pop(key, None)
         st.rerun()
 
+# if st.session_state.get("quiz"):
+#     quiz = st.session_state.quiz
+#     st.session_state.setdefault("quiz_answers", {})
+#     st.subheader(f"Quiz: {quiz['filename']}")
+
+#     for i, question in enumerate(quiz["questions"]):
+#         st.markdown(f"**{i + 1}. {question['question']}**")
+#         st.session_state.quiz_answers[i] = st.radio(
+#             "Select an answer",
+#             options=range(len(question["options"])),
+#             format_func=lambda x, q=question: q["options"][x],
+#             index=None,
+#             key=f"quiz_q_{i}",
+#             label_visibility="collapsed",
+#         )
+
+#     if st.button("Submit answers"):
+#         st.session_state.quiz_submitted = True
+#         if quiz.get("id"):
+#             score = sum(
+#                 1
+#                 for i, q in enumerate(quiz["questions"])
+#                 if st.session_state.quiz_answers.get(i) == q["correct_index"]
+#             )
+#             try:
+#                 agent.save_attempt(
+#                     quiz["id"],
+#                     st.session_state.quiz_answers,
+#                     score,
+#                     len(quiz["questions"]),
+#                 )
+#             except Exception as e:
+#                 st.warning(f"Could not save attempt: {e}")
+
+#     if st.session_state.get("quiz_submitted"):
+#         score = 0
+#         for i, question in enumerate(quiz["questions"]):
+#             chosen = st.session_state.quiz_answers.get(i)
+#             correct = question["correct_index"]
+#             if chosen == correct:
+#                 score += 1
+#                 st.success(f"{i + 1}. Correct")
+#             else:
+#                 st.error(
+#                     f"{i + 1}. Answer: {question['options'][correct]}"
+#                 )
+#             if question["explanation"]:
+#                 st.caption(question["explanation"])
+
+#         st.subheader(f"Score: {score}/{len(quiz['questions'])}")
+
+#     if st.button("Clear quiz"):
+#         for key in ("quiz", "quiz_answers", "quiz_submitted"):
+#             st.session_state.pop(key, None)
+#         st.rerun()
+
 chat_tokens = get_chat_token_count(
     current_chat_id
 )
@@ -627,6 +685,7 @@ if chat_tokens >= MAX_TOKENS:
         "Token limit reached. "
         "Please create a new chat."
     )
+    render_quiz()
     st.stop()
 
 messages = get_messages(
@@ -652,6 +711,7 @@ if query:
             "This message would exceed the token limit. "
             "Please create a new chat."
         )
+        render_quiz()
         st.stop()
 
     save_message(
@@ -684,3 +744,5 @@ if query:
             if key.startswith("quiz_q_"):
                 del st.session_state[key]
         st.rerun()
+
+render_quiz()
