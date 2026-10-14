@@ -16,7 +16,7 @@ QUIZ_TOOL = {
             "one of the user's documents. Use this when the user asks to be "
             "quizzed or tested, or wants practice questions. Do not use it to "
             "answer questions about document content - use search_documents "
-            "for that."
+            "for that. "
             "Identify the document by document_id (preferred) or "
             "filename; at least one is required."
         ),
