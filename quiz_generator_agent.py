@@ -384,7 +384,7 @@ class QuizAgent:
             return f"Tool '{name}' failed: {e}"
     def _finish(self, topic, difficulty, questions):
         quiz = {
-            "document_id": self._document["id"]
+            "document_id": self._document["id"],
             "filename": self._document["original_filename"],
             "topic": topic,
             "difficulty": difficulty,
