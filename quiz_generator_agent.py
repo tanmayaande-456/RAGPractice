@@ -328,8 +328,7 @@ class QuizAgent:
         rows = [
             row
             for row in results.data or []
-            if self.row_in_document(row)
-            and row.get("similarity", 0) >= 0.3
+            if row.get("similarity", 0) >= 0.3
         ][:match_count]
 
         if not rows:
