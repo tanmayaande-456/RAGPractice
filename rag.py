@@ -20,6 +20,8 @@ SUPABASE_STORAGE_BUCKET = st.secrets["SUPABASE_STORAGE_BUCKET"]
 
 @st.cache_resource
 def get_supabase():
+    if "supabase_client" not in st.session_state:
+        st.session_state.supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
@@ -42,7 +44,7 @@ model = get_embedding_model()
 if "user" not in st.session_state:
     st.session_state.user = None
 
-if st.session_state.user is None:
+if st.session_state.user is None and not st.session_state.get("logged_out"):
     refresh_token = cookies.get("sb_refresh_token")
     if refresh_token:
         try:
@@ -64,9 +66,14 @@ if st.session_state.user is not None:
         st.write(f"User: {name}")
     with b:
         if st.button("Log out"):
-            supabase.auth.sign_out()
+            try:
+                supabase.auth.sign_out({"scope": "local"})
+            except Exception:
+                pass
             cookies.delete("sb_refresh_token", key="logout_cookie")
-            st.session_state.user = None
+            st.session_state.clear()
+            st.query_params.clear()
+            st.session_state.logged_out = True
             st.rerun()
 else:
     st.title("Log in/Sign up")
@@ -78,6 +85,7 @@ else:
         if st.button("Log in!", key="login_btn"):
             try:
                 response = supabase.auth.sign_in_with_password({"email": email, "password": password})
+                st.session_state.pop("logged_out", None)
                 st.session_state.user = response.user
                 cookies.set("sb_refresh_token", response.session.refresh_token, key="login_cookie")
                 st.success("Logged in!")
