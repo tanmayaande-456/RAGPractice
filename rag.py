@@ -18,7 +18,6 @@ SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 SUPABASE_STORAGE_BUCKET = st.secrets["SUPABASE_STORAGE_BUCKET"]
 
 
-@st.cache_resource
 def get_supabase():
     if "supabase_client" not in st.session_state:
         st.session_state.supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
