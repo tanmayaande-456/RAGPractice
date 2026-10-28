@@ -263,14 +263,20 @@ def process_document(file):
     storage_filename = file_hash
     storage_path = f"{USER_ID}/{file_hash}_{file.name}"
 
-    supabase.storage.from_(SUPABASE_STORAGE_BUCKET).upload(
-        storage_path,
-        file_bytes,
-        {"content-type": file.type, "upsert": "false"},
-    )
-
     texts = [chunk["Text"] for chunk in chunks]
     embeddings = model.encode(texts, show_progress_bar=False)
+    chunk_rows = [
+        {
+            "id": f"{document_id}_{i}",
+            "document_id": document_id,
+            "userId": USER_ID,
+            "content": chunk["Text"],
+            "embedding": embedding.tolist(),
+            "Filename": file.name,
+            "pagenumber": chunk["Page number"],
+        }
+        for i, (chunk, embedding) in enumerate(zip(chunks, embeddings))
+    ]
 
     supabase.table("documents").insert({
         "id": document_id,
@@ -282,22 +288,38 @@ def process_document(file):
         "filesize": len(file_bytes),
     }).execute()
 
-    chunk_rows = []
-    for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
-        chunk_rows.append({
-            "id": f"{document_id}_{i}",
-            "document_id": document_id,
-            "userId": USER_ID,
-            "content": chunk["Text"],
-            "embedding": embedding.tolist(),
-            "Filename": file.name,
-            "pagenumber": chunk["Page number"],
-        })
-
-    supabase.table("document_chunks").insert(chunk_rows).execute()
+    try:
+        supabase.storage.from_(SUPABASE_STORAGE_BUCKET).upload(
+            storage_path,
+            file_bytes,
+            {"content-type": file.type, "upsert": "false"},
+        )
+        supabase.table("document_chunks").insert(chunk_rows).execute()
+    except Exception:
+        insert_chunk_failed(document_id, storage_path)
 
     return (True, f"Uploaded and processed {file.name}")
 
+
+def insert_chunk_failed(document_id, storage_path):
+    failed = []
+    steps = [
+        ("chunks", lambda: supabase.table("document_chunks").delete()
+            .eq("document_id", document_id).eq("userId", USER_ID).execute()),
+        ("file", lambda: supabase.storage.from_(SUPABASE_STORAGE_BUCKET).remove([storage_path])),
+        ("document row", lambda: supabase.table("documents").delete()
+            .eq("id", document_id).eq("userId", USER_ID).execute()),
+    ]
+    for name, step in steps:
+        try:
+            step()
+        except Exception:
+            failed.append(name)
+    if failed:
+        st.warning(
+            f"Cleanup incomplete ({', '.join(failed)}). "
+            "Delete the document from the sidebar before retrying."
+        )
 
 def delete_document(document_id):
     document = get_document_by_id(document_id)
