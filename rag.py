@@ -11,7 +11,7 @@ import nltk
 from nltk.tokenize import sent_tokenize
 from pypdf import PdfReader
 import tiktoken
-from chatbot_utils import (
+from utils import (
     count_tokens,
     load_text,
     loadpdf,
