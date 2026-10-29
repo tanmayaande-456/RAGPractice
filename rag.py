@@ -165,7 +165,7 @@ def get_chat_token_count(chat_id):
     total = 0
     for message in get_messages(chat_id):
         if message["role"] == "quiz":
-            continue  # quiz JSON doesn't count toward the chat's budget
+            continue 
         total += count_tokens(message["content"])
     return total
 
@@ -502,7 +502,6 @@ with st.expander("My quiz stats"):
                     f"({row['score']}/{row['total']}, {row['attempts']} attempt(s))"
                 )
 
-# ---- Chat timeline: messages, summaries and quizzes in the order they happened ----
 
 messages = get_messages(current_chat_id)
 
