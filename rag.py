@@ -11,6 +11,13 @@ import nltk
 from nltk.tokenize import sent_tokenize
 from pypdf import PdfReader
 import tiktoken
+from chatbot_utils import (
+    count_tokens,
+    load_text,
+    loadpdf,
+    chunk_text,
+    chunk_pdf,
+)
 
 GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
@@ -115,38 +122,11 @@ agent = build_agent(supabase, groq_client, model, USER_ID)
 
 st.title("Chatbot")
 
-encoding = tiktoken.get_encoding("gpt2")
 
-
-def count_tokens(text):
-    return len(encoding.encode(text))
 
 
 MAX_TOKENS = 100000
 
-
-def load_text(file_bytes):
-    return file_bytes.decode("utf-8")
-
-
-def loadpdf(file_bytes):
-    read = PdfReader(BytesIO(file_bytes))
-    pages = []
-    for pagenumber, page in enumerate(read.pages, start=1):
-        extract = page.extract_text()
-        if extract:
-            pages.append({"Page number": pagenumber, "Text": extract})
-    return pages
-
-
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt')
-try:
-    nltk.data.find('tokenizers/punkt_tab')
-except LookupError:
-    nltk.download('punkt_tab')
 
 
 def get_chats():
@@ -222,24 +202,6 @@ def document_exists_by_hash(file_hash):
         if document.get("storage_filename") == file_hash:
             return document
     return None
-
-
-def chunk_text(text, chunk_size=5):
-    sentences = sent_tokenize(text)
-    chunks = []
-    for i in range(0, len(sentences), chunk_size):
-        chunks.append({"Page number": 0, "Text": " ".join(sentences[i:i + chunk_size])})
-    return chunks
-
-
-def chunk_pdf(pages, chunk_size=5):
-    chunks = []
-    for stuff in pages:
-        pagenumber = stuff["Page number"]
-        sentences = sent_tokenize(stuff["Text"])
-        for i in range(0, len(sentences), chunk_size):
-            chunks.append({"Page number": pagenumber, "Text": " ".join(sentences[i:i + chunk_size])})
-    return chunks
 
 
 def process_document(file):
