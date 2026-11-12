@@ -95,4 +95,4 @@ def test_document_exists_by_hash(seeded):
     assert found["id"] == expected["id"]
 
 def test_document_exists_by_hash_nonexistent_hash(seeded):
-    assert document_exists_by_hash(seeded["client"], seeded["user_id"], "testing_purpose_doc")
+    assert document_exists_by_hash(seeded["client"], seeded["user_id"], "testing_purpose_doc") is None
