@@ -7,7 +7,8 @@ from utils import (
     get_messages,
     get_documents,
     get_document_by_id,
-    get_chat_token_count
+    get_chat_token_count,
+    document_exists_by_hash
 )
 
 def test_load_text_decodes_utf8():
@@ -86,3 +87,12 @@ def test_get_document_by_id_returns_none_when_missing(seeded):
 def test_get_chat_token_count_skips_quiz_messages(seeded):
     expected = sum(count_tokens(m["content"]) for m in seeded["messages"] if m["role"] != "quiz")
     assert get_chat_token_count(seeded["client"], seeded["chat"]["id"]) == expected
+
+def test_document_exists_by_hash(seeded):
+    expected = seeded["documents"][0]
+    found = document_exists_by_hash(seeded["client"], seeded["user_id"], expected["storage_filename"])
+    assert found is not None
+    assert found["id"] == expected["id"]
+
+def test_document_exists_by_hash_nonexistent_hash(seeded):
+    assert document_exists_by_hash(seeded["client"], seeded["user_id"], "testing_purpose_doc")
