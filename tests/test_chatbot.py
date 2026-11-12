@@ -7,6 +7,7 @@ from utils import (
     get_messages,
     get_documents,
     get_document_by_id,
+    get_chat_token_count
 )
 
 def test_load_text_decodes_utf8():
@@ -62,7 +63,6 @@ def test_get_messages_returns_seeded_messages_in_order(seeded):
 
 
 def test_get_messages_unknown_chat_returns_empty_list(seeded):
-    # Use an id that can't exist; adjust if your chat ids are integers
     assert get_messages(seeded["client"], "00000000-0000-0000-0000-000000000000") == []
 
 
