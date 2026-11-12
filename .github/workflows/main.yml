@@ -2,7 +2,7 @@ name: Student Chatbot CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, Testing]
   pull_request:
     branches: [main]
   workflow_dispatch:
