@@ -63,7 +63,7 @@ def test_get_messages_returns_seeded_messages_in_order(seeded):
 
 
 def test_get_messages_unknown_chat_returns_empty_list(seeded):
-    assert get_messages(seeded["client"], "00000000-0000-0000-0000-000000000000") == []
+    assert get_messages(seeded["client"], -1) == []
 
 
 def test_get_documents_returns_seeded_documents_newest_first(seeded):
