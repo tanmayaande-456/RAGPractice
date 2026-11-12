@@ -17,6 +17,11 @@ from utils import (
     loadpdf,
     chunk_text,
     chunk_pdf,
+    get_chat_token_count,
+    get_chats,
+    get_document_by_id,
+    get_documents,
+    get_messages
 )
 
 GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
@@ -128,29 +133,12 @@ st.title("Chatbot")
 MAX_TOKENS = 100000
 
 
-
-def get_chats():
-    response = supabase.table("chats").select("*").eq("userId", USER_ID).order("created_at").execute()
-    return response.data or []
-
-
 def create_chat():
     chats = get_chats()
     title = f"Chat {len(chats) + 1}"
     response = supabase.table("chats").insert({"userId": USER_ID, "title": title}).execute()
     return response.data[0]
 
-
-def get_messages(chat_id):
-    response = (
-        supabase
-        .table("messages")
-        .select("id, created_at, chat_id, role, content")
-        .eq("chat_id", chat_id)
-        .order("created_at")
-        .execute()
-    )
-    return response.data or []
 
 
 def save_message(chat_id, role, content):
@@ -258,7 +246,10 @@ def process_document(file):
         )
         supabase.table("document_chunks").insert(chunk_rows).execute()
     except Exception:
-        insert_chunk_failed(document_id, storage_path)
+        failed = insert_chunk_failed(document_id, storage_path)
+        if (failed):
+            return (False, f"Upload failed, delete document from sidebar and retry")
+        return (False, f"Upload failed. Please try again.")
 
     return (True, f"Uploaded and processed {file.name}")
 
