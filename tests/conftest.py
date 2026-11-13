@@ -3,6 +3,7 @@ import uuid
 
 import pytest
 from supabase import create_client
+from utils import loadpdf
 
 REQUIRED = ["SUPABASE_URL", "SUPABASE_KEY", "TEST_USER_EMAIL", "TEST_USER_PASSWORD"]
 

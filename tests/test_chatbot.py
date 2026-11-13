@@ -8,7 +8,8 @@ from utils import (
     get_documents,
     get_document_by_id,
     get_chat_token_count,
-    document_exists_by_hash
+    document_exists_by_hash,
+    loadpdf
 )
 
 def test_load_text_decodes_utf8():

@@ -21,7 +21,9 @@ from utils import (
     get_chats,
     get_document_by_id,
     get_documents,
-    get_messages
+    get_messages,
+    document_exists_by_hash,
+    insert_chunk_failed
 )
 
 GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
@@ -133,14 +135,6 @@ st.title("Chatbot")
 MAX_TOKENS = 100000
 
 
-def create_chat():
-    chats = get_chats()
-    title = f"Chat {len(chats) + 1}"
-    response = supabase.table("chats").insert({"userId": USER_ID, "title": title}).execute()
-    return response.data[0]
-
-
-
 def save_message(chat_id, role, content):
     supabase.table("messages").insert({
         "chat_id": chat_id,
@@ -149,54 +143,11 @@ def save_message(chat_id, role, content):
     }).execute()
 
 
-def get_chat_token_count(chat_id):
-    total = 0
-    for message in get_messages(chat_id):
-        if message["role"] == "quiz":
-            continue 
-        total += count_tokens(message["content"])
-    return total
-
-
-def get_documents():
-    response = (
-        supabase
-        .table("documents")
-        .select("*")
-        .eq("userId", USER_ID)
-        .order("uploaded_at", desc=True)
-        .execute()
-    )
-    return response.data or []
-
-
-def get_document_by_id(document_id):
-    response = (
-        supabase
-        .table("documents")
-        .select("*")
-        .eq("id", document_id)
-        .eq("userId", USER_ID)
-        .limit(1)
-        .execute()
-    )
-    if not response.data:
-        return None
-    return response.data[0]
-
-
-def document_exists_by_hash(file_hash):
-    for document in get_documents():
-        if document.get("storage_filename") == file_hash:
-            return document
-    return None
-
-
 def process_document(file):
     file_bytes = file.getvalue()
     file_hash = hashlib.sha256(file_bytes).hexdigest()
 
-    if document_exists_by_hash(file_hash):
+    if document_exists_by_hash(supabase, USER_ID, file_hash):
         return (False, f"{file.name} has already been uploaded.")
 
     if file.type == "text/plain":
@@ -245,37 +196,19 @@ def process_document(file):
             {"content-type": file.type, "upsert": "false"},
         )
         supabase.table("document_chunks").insert(chunk_rows).execute()
-    except Exception:
-        failed = insert_chunk_failed(document_id, storage_path)
+    except Exception as e:
+        failed = insert_chunk_failed(supabase, USER_ID, SUPABASE_STORAGE_BUCKET, document_id, storage_path)
         if (failed):
             return (False, f"Upload failed, delete document from sidebar and retry")
+        st.exception(e)
         return (False, f"Upload failed. Please try again.")
+    st.exception(e)
 
     return (True, f"Uploaded and processed {file.name}")
 
 
-def insert_chunk_failed(document_id, storage_path):
-    failed = []
-    steps = [
-        ("chunks", lambda: supabase.table("document_chunks").delete()
-            .eq("document_id", document_id).eq("userId", USER_ID).execute()),
-        ("file", lambda: supabase.storage.from_(SUPABASE_STORAGE_BUCKET).remove([storage_path])),
-        ("document row", lambda: supabase.table("documents").delete()
-            .eq("id", document_id).eq("userId", USER_ID).execute()),
-    ]
-    for name, step in steps:
-        try:
-            step()
-        except Exception:
-            failed.append(name)
-    if failed:
-        st.warning(
-            f"Cleanup incomplete ({', '.join(failed)}). "
-            "Delete the document from the sidebar before retrying."
-        )
-
 def delete_document(document_id):
-    document = get_document_by_id(document_id)
+    document = get_document_by_id(supabase, USER_ID, document_id)
     if not document:
         return (False, "Document not found.")
 
@@ -339,10 +272,10 @@ def render_quiz(message_id, quiz):
         st.rerun()
 
 
-chats = get_chats()
+chats = get_chats(supabase, USER_ID)
 
 if not chats:
-    chats = [create_chat()]
+    chats = [create_chat(supabase, USER_ID)]
 
 if "current_chat_id" not in st.session_state:
     st.session_state.current_chat_id = chats[0]["id"]
@@ -356,12 +289,12 @@ with st.sidebar:
     st.title("All Chats")
 
     if st.button("New Chat", use_container_width=True):
-        st.session_state.current_chat_id = create_chat()["id"]
+        st.session_state.current_chat_id = create_chat(supabase, USER_ID)["id"]
         st.rerun()
 
     st.divider()
 
-    for chat in get_chats():
+    for chat in get_chats(supabase, USER_ID):
         if st.button(chat["title"], use_container_width=True, key=f"chat_{chat['id']}"):
             st.session_state.current_chat_id = chat["id"]
             st.rerun()
@@ -370,7 +303,7 @@ with st.sidebar:
 
     st.title("Documents")
 
-    documents = get_documents()
+    documents = get_documents(supabase, USER_ID)
 
     if documents:
         for document in documents:
@@ -409,7 +342,7 @@ if files:
             st.error(f"Error processing {file.name}: {e}")
 
 st.subheader("Summarize a document")
-documents = get_documents()
+documents = get_documents(supabase, USER_ID)
 if documents:
     selected_doc = st.selectbox(
         "Select a document",
@@ -494,7 +427,7 @@ with st.expander("My quiz stats"):
                 )
 
 
-messages = get_messages(current_chat_id)
+messages = get_messages(supabase, current_chat_id)
 
 for message in messages:
     if message["role"] == "quiz":
@@ -507,7 +440,7 @@ for message in messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-chat_tokens = get_chat_token_count(current_chat_id)
+chat_tokens = get_chat_token_count(supabase, current_chat_id)
 
 if chat_tokens >= MAX_TOKENS:
     st.error("Token limit reached. Please create a new chat.")
