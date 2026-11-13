@@ -45,6 +45,8 @@ jobs:
           SUPABASE_KEY: ${{secrets.SUPABASE_KEY}}
           TEST_USER_EMAIL: ${{secrets.TEST_USER_EMAIL}}
           TEST_USER_PASSWORD: ${{secrets.TEST_USER_PASSWORD}}
+          TEST_USER_EMAIL_2: ${{secrets.TEST_USER_EMAIL_2}}
+          TEST_USER_PASSWORD_2: 4{{secrets.TEST_USER_PASSWORD_2}}
         run: |
           if find tests -type f -name 'test_*.py' -print -quit 2>/dev/null | grep -q .; then
             python -m pytest tests/ -v
