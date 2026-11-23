@@ -1,6 +1,7 @@
 import os
 import uuid
-
+import utils
+from unittest.mock import MagicMock
 import pytest
 from supabase import create_client
 from utils import loadpdf
