@@ -25,6 +25,7 @@ Store document metadata in Supabase
 Track chat token usage
 Enforce a per-chat token limit
 Include document filenames and page numbers in retrieved context
+Generate quizzes for the documents uploaded while picking the number of questions and the difficulty of those questions
 
 ### Agents
 DocumentAgent:
@@ -48,4 +49,9 @@ We use this agent to generate quizzes for the user after the user selects a diff
 Documents uploaded are stored in a supabase bucket
 
 ### Architecture
-Upload file -> Extract text and chunk -> Sentence transformer -> Make embeddings and store in chromadb -> User asks question -> Search embeddings -> Retrieve top relevant chunks -> use groq API to formulate the answer -> Output answer
+## Simple question answer:
+Upload file -> Extract text and chunk -> Sentence transformer -> Make embeddings and store in PGVector -> User asks question -> Search embeddings -> Retrieve top relevant chunks -> use groq API to formulate the answer -> Output answer
+## Quiz generation for particular topic from uploaded document:
+Upload file -> Extract text and chunk -> Sentence transformer -> Make embeddings and store in PGVector -> User asks for questions about a particular topic -> Retrieve top relevant chunks -> Use Groq API to make questions using -> Multiple choice quiz
+## Quiz generation of uploaded file
+Upload file -> Extract text and chunk -> Sentence transformer -> Make embeddings and store in PGVector -> Retrieve top relevant chunks -> Use Groq API to make questions using -> Multiple choice quiz
