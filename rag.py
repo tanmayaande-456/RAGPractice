@@ -23,7 +23,8 @@ from utils import (
     get_documents,
     get_messages,
     document_exists_by_hash,
-    insert_chunk_failed
+    insert_chunk_failed,
+    create_chat
 )
 
 GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
