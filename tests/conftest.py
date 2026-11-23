@@ -7,6 +7,10 @@ from utils import loadpdf
 
 REQUIRED = ["SUPABASE_URL", "SUPABASE_KEY", "TEST_USER_EMAIL", "TEST_USER_PASSWORD"]
 
+def fake_page(text):
+    page = MagicMock()
+    page.extract_text.return_value = text
+    return page
 
 @pytest.fixture(scope="session")
 def client_and_user():
@@ -67,3 +71,16 @@ def seeded(client_and_user):
     client.table("chats").delete().eq("id", chat["id"]).execute()
     for doc in documents:
         client.table("documents").delete().eq("id", doc["id"]).eq("userId", user_id).execute()
+
+@pytest.fixture
+def fake_reader(monkeypatch):
+    """Replace utils.PdfReader so loadpdf never parses a real PDF.
+    Call it with a list of page texts to set what the 'PDF' contains."""
+    reader_class = MagicMock()
+    monkeypatch.setattr(utils, "PdfReader", reader_class)
+
+    def set_pages(texts):
+        reader_class.return_value.pages = [fake_page(t) for t in texts]
+        return reader_class
+
+    return set_pages
