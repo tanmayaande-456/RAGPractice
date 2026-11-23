@@ -1,3 +1,6 @@
+import pytest
+from unittest.mock import MagicMock
+import utils
 from utils import (
     count_tokens,
     load_text,
@@ -97,3 +100,42 @@ def test_document_exists_by_hash(seeded):
 
 def test_document_exists_by_hash_nonexistent_hash(seeded):
     assert document_exists_by_hash(seeded["client"], seeded["user_id"], "testing_purpose_doc") is None
+
+def test_loadpdf_text_pnumber(fake_reader):
+    fake_reader(["Page one text", "Page two text"])
+
+    assert loadpdf(b"any bytes") == [
+        {"Page number": 1, "Text": "Page one text"},
+        {"Page number": 2, "Text": "Page two text"},
+    ]
+
+
+def test_loadpdf_skips_empty(fake_reader):
+    fake_reader(["First", "", None, "Fourth"])
+
+    pages = loadpdf(b"any bytes")
+
+    assert [p["Page number"] for p in pages] == [1, 4]
+    assert [p["Text"] for p in pages] == ["First", "Fourth"]
+
+
+def test_loadpdf_no_text(fake_reader):
+    fake_reader(["", None])
+
+    assert loadpdf(b"any bytes") == []
+
+
+def test_loadpdf_no_pages(fake_reader):
+    fake_reader([])
+
+    assert loadpdf(b"any bytes") == []
+
+
+def test_loadpdf_bytes_pdfreader(fake_reader):
+    reader_class = fake_reader(["Text"])
+
+    loadpdf(b"%PDF-fake-content")
+
+    reader_class.assert_called_once()
+    stream = reader_class.call_args.args[0]
+    assert stream.read() == b"%PDF-fake-content"
