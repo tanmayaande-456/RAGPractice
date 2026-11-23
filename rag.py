@@ -26,8 +26,8 @@ from utils import (
     insert_chunk_failed,
     create_chat
 )
-nltk.download(punkt)
-nltk.download(punkt_tab)
+nltk.download('punkt')
+nltk.download('punkt_tab')
 
 GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
