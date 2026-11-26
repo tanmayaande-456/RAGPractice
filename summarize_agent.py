@@ -1,5 +1,6 @@
 import json
 
+# AGENT_MODEL = "openai/gpt-oss-20b"
 AGENT_MODEL = "openai/gpt-oss-20b"
 
 MAX_BATCH_CHARS = 12000

@@ -1,0 +1,94 @@
+{
+  "Questions": [
+    {
+      "Number": 1,
+      "Question": "What is Agile model?",
+      "Answer": "Agile is a flexible approach to developing software. Unlike traditional methods where everything is planned in advance, Agile allows teams to adapt and make changes as they go.",
+      "Must_include": ["flexible", "agile", "adapt", "changes"]
+    },
+    {
+      "Number": 2,
+      "Question": "What are the four Agile values?",
+      "Answer": "The four Agile values are individuals and interactions over processes and tools, working software over comprehensive documentation, customer collaboration over contract negotiation, and responding to change over following a plan. These values focus on teamwork, customer satisfaction, working software, and accepting change.",
+      "Must_include": ["individuals", "interactions", "software", "documentation", "change", "plan"]
+    },
+    {
+      "Number": 3,
+      "Question": "What is Waterfall model?",
+      "Answer": "The Waterfall Model is a linear and sequential approach where each phase of the development process must be completed before moving on to the next. It is like following a recipe step-by-step where you cannot skip or go back to previous steps.",
+      "Must_include": ["waterfall", "linear", "phase", "sequential"]
+    },
+    {
+      "Number": 4,
+      "Question": "What is Software Engineering?",
+      "Answer": "Software Engineering is a systematic and structured approach to developing, operating, and maintaining software. It applies engineering principles to produce reliable and efficient software.",
+      "Must_include": ["software engineering", "systematic", "structured", "developing", "maintaining"]
+    },
+    {
+      "Number": 5,
+      "Question": "Why is Software Engineering important?",
+      "Answer": "Software Engineering is important because it imposes discipline on software development, ensures high-quality software, and helps build complex systems within a specified time. It provides a systematic approach to developing reliable and efficient applications.",
+      "Must_include": ["discipline", "quality", "complex systems", "time", "reliable"]
+    },
+    {
+      "Number": 6,
+      "Question": "What are the two roles of software?",
+      "Answer": "Software plays two major roles. First, it acts as a product by delivering computing capabilities and transforming information. Second, it acts as a vehicle to deliver other products by controlling computers, supporting communication, and helping create other programs.",
+      "Must_include": ["product", "vehicle", "computing", "information", "programs"]
+    },
+    {
+      "Number": 7,
+      "Question": "What are the characteristics of software?",
+      "Answer": "The main characteristics of software are intangible nature, complexity, evolution over time, no physical wear and tear, and high dependability. Software cannot be physically touched, needs continuous updates, and must remain reliable.",
+      "Must_include": ["intangible", "complexity", "evolution", "wear and tear", "dependability"]
+    },
+    {
+      "Number": 8,
+      "Question": "What is Legacy Software?",
+      "Answer": "Legacy software is old software that is still used by companies even though it was developed using outdated technology. It may be difficult to maintain and upgrade, but organizations continue using it because it is important for their daily operations.",
+      "Must_include": ["legacy software", "old", "outdated technology", "maintain", "daily operations"]
+    },
+    {
+      "Number": 9,
+      "Question": "What are Software Myths?",
+      "Answer": "Software myths are common misconceptions or false beliefs about software development. They can lead to poor decisions and problems in software projects. The three main types are management myths, customer myths, and practitioner myths.",
+      "Must_include": ["software myths", "misconceptions", "management", "customer", "practitioner"]
+    },
+    {
+      "Number": 10,
+      "Question": "What are the layers of Software Engineering?",
+      "Answer": "Software Engineering is a layered technology consisting of four layers: Quality Focus, Process, Methods, and Tools. Quality Focus is the foundation, Process defines the steps, Methods provide techniques, and Tools help automate development activities.",
+      "Must_include": ["layered technology", "quality focus", "process", "methods", "tools"]
+    },
+    {
+      "Number": 11,
+      "Question": "What is a Software Process Framework?",
+      "Answer": "A Software Process Framework is an organized approach that combines processes, methods, and tools to guide software development. It includes framework activities, umbrella activities, task sets, and engineering actions to ensure high-quality software.",
+      "Must_include": ["software process framework", "processes", "methods", "tools", "framework activities", "umbrella activities"]
+    },
+    {
+      "Number": 12,
+      "Question": "What are the five activities of the Generic Process Model?",
+      "Answer": "The five activities of the Generic Process Model are Communication, Planning, Modeling, Construction, and Deployment. Communication gathers requirements, Planning creates a roadmap, Modeling designs the system, Construction involves coding and testing, and Deployment delivers the software to users.",
+      "Must_include": ["communication", "planning", "modeling", "construction", "deployment"]
+    },
+    {
+      "Number": 13,
+      "Question": "What is subnetting?",
+      "Answer": "I could not find that information in the documents.",
+      "Must_include": []
+    },
+    {
+      "Number": 14,
+      "Question": "What is ReactJS?",
+      "Answer": "I could not find that information in the documents.",
+      "Must_include": []
+    },
+    {
+      "Number": 15,
+      "Question": "What is binary search tree?",
+      "Answer": "I could not find that information in the documents.",
+      "Must_include": []
+    }
+  ]
+}
