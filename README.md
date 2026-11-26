@@ -55,3 +55,33 @@ Upload file -> Extract text and chunk -> Sentence transformer -> Make embeddings
 Upload file -> Extract text and chunk -> Sentence transformer -> Make embeddings and store in PGVector -> User asks for questions about a particular topic -> Retrieve top relevant chunks -> Use Groq API to make questions using -> Multiple choice quiz
 ## Quiz generation of uploaded file
 Upload file -> Extract text and chunk -> Sentence transformer -> Make embeddings and store in PGVector -> Retrieve top relevant chunks -> Use Groq API to make questions using -> Multiple choice quiz
+
+
+### How to run the application
+## Pre-requisites
+Ensure that you have the following installed on your system
+- Python 3.10 or above
+- Git
+- Supabase account
+- Groq API key
+## Clone repository
+git clone https://github.com/tanmayaande-456/RAGPractice/edit/Testing
+## Install dependencies
+pip install -r requirements.txt
+## Configure environment variables
+GROQ_API_KEY
+## Run the application
+streamlit rag.py
+
+### Testing
+Extract PDF text ->	Text is successfully extracted with the page numbers
+Chunk documents -> Text is divided into sentence-based chunks without losing sentences.
+Count tokens -> Token count is calculated correctly for the provided text.
+Retrieve chats -> Users chats are retreived
+Retrieve messages -> Messages in a chat are retrieved in the correct order.
+Retrieve documents-> Documents are retrieved in descending order of upload date.
+Retrieve a specific document - > The correct document is returned using its ID.
+Handle nonexistent documents -> None is returned when the document does not exist.
+Track chat token usage-> Token counts are calculated while excluding quiz messages.
+Detect duplicate documents	-> Existing documents are identified using their storage filenames.
+Handle nonexistent document hashes -> No document is returned when the hash does not exist
