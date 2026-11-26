@@ -1,6 +1,6 @@
 import json
 
-AGENT_MODEL = "openai/gpt-oss-120b"
+AGENT_MODEL = "openai/gpt-oss-20b"
 
 MAX_BATCH_CHARS = 12000
 MAX_FINAL_CHARS = 12000
@@ -207,12 +207,11 @@ class DocumentAgent:
         for document in documents:
             size_kb = document.get("filesize", 0) / 1024
             lines.append(
-                f"- {document['original_filename']} ({size_kb:.1f} KB),"
-              f"id: {document['id']})"
+                f"- {document['original_filename']} ({size_kb:.1f} KB, id: {document['id']})"
             )
         return "Uploaded documents:\n" + "\n".join(lines)
 
-    def tool_search_documents(self, query, match_count=5):
+    def tool_search_documents(self, query, match_count=8):
         try:
             match_count = int(match_count)
         except (TypeError, ValueError):
@@ -232,7 +231,7 @@ class DocumentAgent:
 
         chunks = results.data or []
 
-        if not chunks or chunks[0]["similarity"] < 0.3:
+        if not chunks or chunks[0]["similarity"] < 0.2:
             return "No relevant passages found."
 
         parts = []
@@ -245,7 +244,7 @@ class DocumentAgent:
         return "\n\n".join(parts)
 
     def tool_summarize_document(self, filename):
-        document = self._resolve_document(filename)
+        document, error = self._resolve_document(filename)
         if document is None:
           return error
 
@@ -650,7 +649,7 @@ class DocumentAgent:
         except Exception as e:
             return f"Tool '{name}' failed: {e}"
 
-    def run(self, user_query, history=None, max_steps=6, on_step=None):
+    def run(self, user_query, history=None, max_steps=9, on_step=None):
         """
         history: list of {"role": "user"|"assistant", "content": str} from the
                  current chat (tool turns are not persisted).
@@ -672,12 +671,13 @@ class DocumentAgent:
 
         messages.append({"role": "user", "content": user_query})
 
-        for _ in range(max_steps):
+        for step in range(max_steps):
+            is_last = step == max_steps - 1
             response = self.groq.chat.completions.create(
                 model=AGENT_MODEL,
                 messages=messages,
                 tools=TOOLS,
-                tool_choice="auto",
+                tool_choice="none" if is_last else "auto",
                 reasoning_format="hidden",
             )
 
