@@ -48,32 +48,32 @@ We use this agent to generate quizzes for the user after the user selects a diff
 
 Documents uploaded are stored in a supabase bucket
 
-### Architecture
-## Simple question answer:
+## Architecture
+### Simple question answer:
 Upload file -> Extract text and chunk -> Sentence transformer -> Make embeddings and store in PGVector -> User asks question -> Search embeddings -> Retrieve top relevant chunks -> use groq API to formulate the answer -> Output answer
-## Quiz generation for particular topic from uploaded document:
+### Quiz generation for particular topic from uploaded document:
 Upload file -> Extract text and chunk -> Sentence transformer -> Make embeddings and store in PGVector -> User asks for questions about a particular topic -> Retrieve top relevant chunks -> Use Groq API to make questions using -> Multiple choice quiz
-## Quiz generation of uploaded file
+### Quiz generation of uploaded file
 Upload file -> Extract text and chunk -> Sentence transformer -> Make embeddings and store in PGVector -> Retrieve top relevant chunks -> Use Groq API to make questions using -> Multiple choice quiz
 
 
-### How to run the application
-## Pre-requisites
+## How to run the application
+### Pre-requisites
 Ensure that you have the following installed on your system
 - Python 3.10 or above
 - Git
 - Supabase account
 - Groq API key
-## Clone repository
+### Clone repository
 git clone https://github.com/tanmayaande-456/RAGPractice/edit/Testing
-## Install dependencies
+### Install dependencies
 pip install -r requirements.txt
-## Configure environment variables
+### Configure environment variables
 GROQ_API_KEY
-## Run the application
+### Run the application
 streamlit rag.py
 
-### Testing
+## Testing
 Extract PDF text ->	Text is successfully extracted with the page numbers
 Chunk documents -> Text is divided into sentence-based chunks without losing sentences.
 Count tokens -> Token count is calculated correctly for the provided text.
