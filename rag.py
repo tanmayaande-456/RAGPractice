@@ -202,10 +202,8 @@ def process_document(file):
     except Exception as e:
         failed = insert_chunk_failed(supabase, USER_ID, SUPABASE_STORAGE_BUCKET, document_id, storage_path)
         if (failed):
-            return (False, f"Upload failed, delete document from sidebar and retry")
-        st.exception(e)
-        return (False, f"Upload failed. Please try again.")
-    st.exception(e)
+            return (False, f"Upload failed, delete document from sidebar and retry. Error: {e}")
+        return (False, f"Upload failed. Please try again. Error: {e}")
 
     return (True, f"Uploaded and processed {file.name}")
 
