@@ -24,14 +24,10 @@ def make_bot():
     from sentence_transformers import SentenceTransformer
     from supabase import create_client
     from summarize_agent import build_agent
-    # EMAIL= "ande.tanmaya2@gmail.com"
-    # PASSWORD= "123abc"
     supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
     user = supabase.auth.sign_in_with_password({
         "email": os.environ["TEST_USER_EMAIL"],
-        "password": os.environ["TEST_USER_PASSWORD"],
-        # "email": EMAIL,
-        # "password": PASSWORD
+        "password": os.environ["TEST_USER_PASSWORD"]
     }).user
     agent = build_agent(supabase, Groq(api_key=os.environ["GROQ_API_KEY"]), SentenceTransformer("all-MiniLM-L6-v2"), user.id)
     return lambda question: agent.run(question, history=[], on_step=lambda name, args: print(f"    -> {name} {args}"))
