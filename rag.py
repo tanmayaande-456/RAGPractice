@@ -225,8 +225,6 @@ def delete_document(document_id):
 
 
 def render_quiz(message_id, quiz):
-    """Render one quiz stored as a chat message. Keys are namespaced by message id
-    so several quizzes in the same chat don't interfere with each other."""
     prefix = f"quiz_{message_id}"
     questions = quiz["questions"]
 
