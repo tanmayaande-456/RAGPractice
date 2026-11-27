@@ -71,7 +71,7 @@ pip install -r requirements.txt
 ### Configure environment variables
 GROQ_API_KEY
 ### Run the application
-streamlit rag.py
+streamlit run rag.py
 
 ## Testing
 Extract PDF text ->	Text is successfully extracted with the page numbers
