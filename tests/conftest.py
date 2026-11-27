@@ -5,8 +5,11 @@ from unittest.mock import MagicMock
 import pytest
 from supabase import create_client
 from utils import loadpdf
+from pathlib import Path
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-REQUIRED = ["SUPABASE_URL", "SUPABASE_KEY", "TEST_USER_EMAIL", "TEST_USER_PASSWORD"]
+REQUIRED = ["SUPABASE_URL", "SUPABASE_ANON_KEY", "TEST_USER_EMAIL", "TEST_USER_PASSWORD"]
 
 def fake_page(text):
     page = MagicMock()
@@ -19,7 +22,7 @@ def client_and_user():
     if missing:
         pytest.skip(f"Supabase test credentials not set: {', '.join(missing)}")
 
-    client = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
+    client = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_ANON_KEY"])
     auth = client.auth.sign_in_with_password({
         "email": os.environ["TEST_USER_EMAIL"],
         "password": os.environ["TEST_USER_PASSWORD"],
@@ -27,6 +30,18 @@ def client_and_user():
     yield client, auth.user.id
     client.auth.sign_out()
 
+@pytest.fixture(scope="session")
+def other_user():
+    email = os.environ.get("TEST_USER2_EMAIL")
+    password = os.environ.get("TEST_USER2_PASSWORD")
+    if not email or not password:
+        pytest.skip("Set TEST_USER2_EMAIL and TEST_USER2_PASSWORD to run isolation tests")
+
+    client = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_ANON_KEY"])
+    user = client.auth.sign_in_with_password({"email": email, "password": password}).user
+
+    yield {"client": client, "user_id": user.id}
+    client.auth.sign_out()
 
 @pytest.fixture(scope="session")
 def seeded(client_and_user):

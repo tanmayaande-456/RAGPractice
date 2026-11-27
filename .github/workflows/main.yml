@@ -42,7 +42,7 @@ jobs:
       - name: Run tests
         env:
           SUPABASE_URL: ${{secrets.SUPABASE_URL}}
-          SUPABASE_KEY: ${{secrets.SUPABASE_KEY}}
+          SUPABASE_ANON_KEY: ${{secrets.SUPABASE_ANON_KEY}}
           TEST_USER_EMAIL: ${{secrets.TEST_USER_EMAIL}}
           TEST_USER_PASSWORD: ${{secrets.TEST_USER_PASSWORD}}
         run: |

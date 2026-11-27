@@ -31,13 +31,13 @@ nltk.download('punkt_tab')
 
 GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
-SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+SUPABASE_ANON_KEY = st.secrets["SUPABASE_ANON_KEY"]
 SUPABASE_STORAGE_BUCKET = st.secrets["SUPABASE_STORAGE_BUCKET"]
 
 
 def get_supabase():
     if "supabase_client" not in st.session_state:
-        st.session_state.supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        st.session_state.supabase_client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
     return st.session_state.supabase_client
 
 

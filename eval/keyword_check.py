@@ -24,7 +24,7 @@ def make_bot():
     from sentence_transformers import SentenceTransformer
     from supabase import create_client
     from summarize_agent import build_agent
-    supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
+    supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_ANON_KEY"])
     user = supabase.auth.sign_in_with_password({
         "email": os.environ["TEST_USER_EMAIL"],
         "password": os.environ["TEST_USER_PASSWORD"]

@@ -1,5 +1,6 @@
 import pytest
 from unittest.mock import MagicMock
+from postgrest.exceptions import APIError
 import utils
 from utils import (
     count_tokens,
@@ -139,3 +140,21 @@ def test_loadpdf_bytes_pdfreader(fake_reader):
     reader_class.assert_called_once()
     stream = reader_class.call_args.args[0]
     assert stream.read() == b"%PDF-fake-content"
+
+def test_isolation_users_are_different(seeded, other_user):
+    assert seeded["user_id"] != other_user["user_id"]
+
+def test_other_user_does_not_see_chat_in_own_list(seeded, other_user):
+    chats = get_chats(other_user["client"], other_user["user_id"])
+    assert seeded["chat"]["id"] not in [c["id"] for c in chats]
+
+
+def test_spoofed_user_id_returns_no_chats(seeded, other_user):
+    assert get_chats(other_user["client"], seeded["user_id"]) == []
+
+
+def test_other_user_cannot_delete_chat(seeded, other_user):
+    other_user["client"].table("chats").delete().eq("id", seeded["chat"]["id"]).execute()
+
+    still_there = get_chats(seeded["client"], seeded["user_id"])
+    assert seeded["chat"]["id"] in [c["id"] for c in still_there]
